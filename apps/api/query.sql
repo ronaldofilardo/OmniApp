@@ -1,0 +1,1 @@
+SELECT id, file_name, mime_type, file_type, LENGTH(file_content) as base64_size, SUBSTRING(file_content, 1, 50) as base64_preview, uploaded_at FROM event_files WHERE file_content IS NOT NULL ORDER BY uploaded_at DESC LIMIT 3;
