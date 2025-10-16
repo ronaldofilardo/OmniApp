@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { QueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { CreatePontualEvent } from 'shared/src/validations';
+import type { CreatePontualEvent } from 'shared/validations';
 
 // Este tipo é usado em vários lugares, então precisa ser atualizado.
 export interface Event {

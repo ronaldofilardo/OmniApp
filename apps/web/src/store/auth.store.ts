@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../services/api';
-import type { UserLogin } from 'shared/src/validations';
+import type { UserLogin } from 'shared/validations';
 
 interface User {
   id: string;

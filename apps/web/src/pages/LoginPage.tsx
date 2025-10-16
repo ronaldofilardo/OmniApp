@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 
 // Importando do pacote compartilhado
-import { userLoginSchema, type UserLogin } from 'shared/src/validations';
+import { userLoginSchema, type UserLogin } from 'shared/validations';
 
 import { useAuthStore } from '../store/auth.store';
 import { useToast } from '../components/useToast';

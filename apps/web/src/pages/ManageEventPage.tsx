@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 // CORREÇÃO: Importando o novo schema simplificado
-import { createPontualEventSchema, type CreatePontualEvent } from 'shared/src/validations';
+import { createPontualEventSchema, type CreatePontualEvent } from 'shared/validations';
 import { api } from '../services/api';
 
 import { Button } from '../components/Button';

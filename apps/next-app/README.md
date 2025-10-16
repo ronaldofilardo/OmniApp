@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Omni Saúde - Sistema Unificado
 
-## Getting Started
+Sistema completo de gestão de saúde com frontend e backend unificados em Next.js.
 
-First, run the development server:
+## 🚀 Deploy no Vercel (Free Tier)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Pré-requisitos
+
+- Conta no [Vercel](https://vercel.com)
+- Banco PostgreSQL no [Neon](https://neon.tech) (já configurado)
+
+### Configuração do Banco
+
+O banco já está configurado com a URL:
+
+```
+postgresql://neondb_owner:npg_BPgFxGM04snX@ep-orange-heart-acvd2opp-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Deploy Steps
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Conectar repositório no Vercel**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   - Importe o projeto `apps/next-app` do GitHub
+   - Configure como projeto Next.js
 
-## Learn More
+2. **Configurar Environment Variables**
+   Adicione no Vercel as seguintes variáveis:
 
-To learn more about Next.js, take a look at the following resources:
+   ```env
+   DATABASE_URL=postgresql://neondb_owner:npg_BPgFxGM04snX@ep-orange-heart-acvd2opp-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+   JWT_SECRET=your-secure-jwt-secret-here
+   NODE_ENV=production
+   NEXT_PUBLIC_API_URL=https://your-app.vercel.app
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. **Configurações do Build**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   - **Build Command**: `prisma generate && next build`
+   - **Install Command**: `pnpm install`
+   - **Root Directory**: `apps/next-app`
 
-## Deploy on Vercel
+4. **Deploy**
+   - O Vercel fará o deploy automaticamente
+   - O banco será sincronizado via `prisma db push`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## ⚠️ Limitações do Free Tier
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Timeout**: 10 segundos máximo por função API
+- **Região**: São Paulo (sao-paulo1) configurada
+- **Conexões**: Limitadas para otimizar performance
+
+## 🔧 Comandos Úteis
+
+```bash
+# Desenvolvimento local
+pnpm dev
+
+# Build para produção
+pnpm build
+
+# Push do schema para o banco
+pnpm db:push
+
+# Gerar cliente Prisma
+pnpm prisma generate
+```
+
+## 📊 Funcionalidades
+
+- ✅ Gestão de Profissionais
+- ✅ Agendamento de Eventos
+- ✅ Upload de Arquivos
+- ✅ Compartilhamento Seguro
+- ✅ Timeline de Eventos
+- ✅ Repositório de Arquivos
+- ✅ Notificações Push
+
+## 🏗️ Arquitetura
+
+- **Frontend**: Next.js 15 + React 19
+- **Backend**: Next.js API Routes
+- **Banco**: PostgreSQL (Neon)
+- **ORM**: Prisma
+- **Deploy**: Vercel
+
+## 🔐 Segurança
+
+- Sistema single-user (sem autenticação JWT)
+- Sessões de compartilhamento simplificadas
+- Validação com Zod
+- CORS configurado
+- Headers de segurança

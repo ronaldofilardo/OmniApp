@@ -1,1 +1,8 @@
-{}
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd apps/next-app && pnpm install && pnpm run build",
+  "devCommand": "cd apps/next-app && pnpm run dev",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "outputDirectory": "apps/next-app/.next"
+}

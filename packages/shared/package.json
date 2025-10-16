@@ -1,8 +1,13 @@
 {
   "name": "shared",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Shared utilities and validations for OmniApp",
+  "main": "./src/validations.ts",
+  "types": "./src/validations.ts",
+  "exports": {
+    ".": "./src/validations.ts",
+    "./validations": "./src/validations.ts"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

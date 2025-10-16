@@ -1,6 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Transpile workspace packages
+  transpilePackages: ['shared'],
+  
+  // Output configuration for Vercel
+  output: 'standalone',
+
+  // Timeout configuration for Vercel free tier (10 seconds max)
+  experimental: {
+    optimizePackageImports: ['phosphor-react'],
+    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
+  },
+  
   async headers() {
     return [
       {
@@ -14,6 +26,12 @@ const nextConfig: NextConfig = {
         ]
       }
     ]
+  },
+  
+  // Configuração experimental para melhor performance
+  experimental: {
+    optimizePackageImports: ['phosphor-react'],
+    serverComponentsExternalPackages: ['@prisma/client', 'prisma'],
   },
 };
 
