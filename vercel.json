@@ -1,1 +1,6 @@
-{}
+{
+  "buildCommand": "cd apps/next-app && npx prisma generate && npm run build",
+  "outputDirectory": "apps/next-app/.next",
+  "installCommand": "npm install --legacy-peer-deps",
+  "devCommand": "cd apps/next-app && npm run dev"
+}
