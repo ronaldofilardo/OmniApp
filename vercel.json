@@ -1,10 +1,5 @@
 {
   "buildCommand": "cd apps/next-app && pnpm install && npx prisma generate && pnpm build",
   "installCommand": "pnpm install",
-  "framework": "nextjs",
-  "functions": {
-    "apps/next-app/src/app/api/**/*.ts": {
-      "runtime": "@vercel/node"
-    }
-  }
+  "framework": "nextjs"
 }
