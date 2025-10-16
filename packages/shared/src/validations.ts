@@ -28,7 +28,13 @@ export const createPontualEventSchema = baseEventSchema.extend({
   type: z.enum(["Consulta", "Exame"]),
   end_time: z.string().nonempty("A hora de fim é obrigatória."),
   instructions: z.string().max(50, "As instruções não podem exceder 50 caracteres.").optional(),
-}).refine(data => data.end_time > data.start_time, {
+}).refine(data => {
+    // Normalizar horários para HH:mm antes de comparar (remover segundos se existirem)
+    const normalizeTime = (time: string) => time?.slice(0, 5) || time;
+    const start = normalizeTime(data.start_time);
+    const end = normalizeTime(data.end_time);
+    return end > start;
+  }, {
     message: "A hora de fim deve ser posterior à hora de início.",
     path: ["end_time"],
 });

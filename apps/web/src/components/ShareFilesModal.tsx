@@ -9,13 +9,180 @@ import { Modal } from './Modal';
 import { Button } from './Button';
 
 // ... (Tipagem e Styled Components)
-interface EventFile { id: string; file_name: string; }
+interface EventFile { 
+  id: string; 
+  file_name: string;
+  file_type: string;
+}
+
+// Mapeamento dos tipos de arquivo do backend para labels amigáveis
+const FILE_TYPE_LABELS: Record<string, string> = {
+  'Requisicao': 'Requisição',
+  'Autorizacao': 'Autorização',
+  'Atestado': 'Atestado',
+  'Prescricao': 'Prescrição',
+  'LaudoResultado': 'Laudo/Resultado',
+  'NotaFiscal': 'Nota Fiscal',
+};
+
+// Função para obter o label correto baseado no file_type
+const getFileTypeLabel = (file: EventFile): string => {
+  // Usar o file_type se disponível
+  if (file.file_type && FILE_TYPE_LABELS[file.file_type]) {
+    return FILE_TYPE_LABELS[file.file_type];
+  }
+  
+  // Fallback: tentar identificar pelo nome do arquivo
+  const nameLower = file.file_name.toLowerCase();
+  
+  if (nameLower.includes('requisicao') || nameLower.includes('requisição')) {
+    return 'Requisição';
+  }
+  if (nameLower.includes('autorizacao') || nameLower.includes('autorização')) {
+    return 'Autorização';  
+  }
+  if (nameLower.includes('atestado')) {
+    return 'Atestado';
+  }
+  if (nameLower.includes('prescricao') || nameLower.includes('prescrição')) {
+    return 'Prescrição';
+  }
+  if (nameLower.includes('laudo') || nameLower.includes('resultado')) {
+    return 'Laudo/Resultado';
+  }
+  if (nameLower.includes('nota') && nameLower.includes('fiscal')) {
+    return 'Nota Fiscal';
+  }
+  
+  // Fallback por extensão
+  if (nameLower.endsWith('.pdf')) {
+    return 'Documento PDF';
+  }
+  if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png')) {
+    return 'Imagem';
+  }
+  if (nameLower.endsWith('.doc') || nameLower.endsWith('.docx')) {
+    return 'Documento Word';
+  }
+  if (nameLower.endsWith('.txt')) {
+    return 'Arquivo de Texto';
+  }
+  if (nameLower.endsWith('.mp4') || nameLower.endsWith('.avi')) {
+    return 'Vídeo';
+  }
+  
+  return 'Documento';
+};
+
+// Função para definir cores por tipo de documento (igual ao EventCard)
+const getFileTypeColor = (fileType: string): string => {
+  switch (fileType) {
+    case 'Requisição': return '#28a745'; // Verde
+    case 'Autorização': return '#17a2b8'; // Azul claro
+    case 'Atestado': return '#28a745'; // Verde
+    case 'Prescrição': return '#6f42c1'; // Roxo
+    case 'Laudo/Resultado': return '#dc3545'; // Vermelho
+    case 'Nota Fiscal': return '#ffc107'; // Amarelo
+    case 'Documento PDF': return '#dc3545'; // Vermelho
+    case 'Imagem': return '#17a2b8'; // Azul
+    case 'Documento Word': return '#007bff'; // Azul escuro
+    case 'Arquivo de Texto': return '#6c757d'; // Cinza
+    case 'Vídeo': return '#e83e8c'; // Rosa
+    default: return '#6c757d'; // Cinza padrão
+  }
+};
+
+// Função para obter ícone/letra do tipo de documento
+const getFileTypeIcon = (fileType: string): string => {
+  switch (fileType) {
+    case 'Requisição': return 'R';
+    case 'Autorização': return 'A';
+    case 'Atestado': return 'At';
+    case 'Prescrição': return 'P';
+    case 'Laudo/Resultado': return 'L';
+    case 'Nota Fiscal': return 'NF';
+    case 'Documento PDF': return 'PDF';
+    case 'Imagem': return 'IMG';
+    case 'Documento Word': return 'DOC';
+    case 'Arquivo de Texto': return 'TXT';
+    case 'Vídeo': return 'VID';
+    default: return 'DOC';
+  }
+};
 const ModalHeader = styled.div` display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; `;
 const ModalTitle = styled.h2` font-size: 1.25rem; `;
 const CloseButton = styled.button` background: none; border: none; cursor: pointer; padding: 0.25rem; line-height: 1; `;
 const StepContainer = styled.div` text-align: center; `;
-const FileList = styled.div` text-align: left; margin-bottom: 1.5rem; `;
-const CheckboxContainer = styled.div` display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; `;
+const FileList = styled.div` 
+  display: grid; 
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  text-align: left; 
+  margin-bottom: 1.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+`;
+
+const FileCard = styled.div<{ isSelected: boolean; fileType: string }>`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 2px solid ${props => props.isSelected ? getFileTypeColor(props.fileType) : '#e0e0e0'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: ${props => props.isSelected ? `${getFileTypeColor(props.fileType)}15` : 'white'};
+  box-shadow: ${props => props.isSelected ? `0 2px 8px ${getFileTypeColor(props.fileType)}30` : '0 1px 3px rgba(0,0,0,0.1)'};
+  
+  &:hover {
+    border-color: ${props => getFileTypeColor(props.fileType)};
+    background: ${props => `${getFileTypeColor(props.fileType)}10`};
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
+const FileIcon = styled.div<{ fileType: string }>`
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: ${props => getFileTypeColor(props.fileType)};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+  flex-shrink: 0;
+`;
+
+const FileInfo = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const FileTypeName = styled.span`
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: #333;
+`;
+
+const FileName = styled.span`
+  font-size: 0.8rem;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+
 const QRContainer = styled.div` background: white; padding: 1rem; display: inline-block; margin: 1rem 0; `;
 const AccessCode = styled.p` font-size: 2rem; font-weight: bold; letter-spacing: 0.5rem; margin: 1rem 0; `;
 
@@ -127,8 +294,14 @@ export function ShareFilesModal({ isOpen, onClose, eventId }: ShareFilesModalPro
   };
 
   const shareUrl = shareData
-    ? (shareData.shareUrl
-        || `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}/share/${shareData.shareToken}`)
+    ? (shareData.shareUrl || (() => {
+        // Garantir que use localhost em vez de IP
+        const hostname = window.location.hostname === '192.168.15.2' || 
+                        window.location.hostname === '192.168.15.3' ? 
+                        'localhost' : window.location.hostname;
+        const port = window.location.port ? `:${window.location.port}` : '';
+        return `${window.location.protocol}//${hostname}${port}/share/${shareData.shareToken}`;
+      })())
     : '';
 
   return (
@@ -142,12 +315,36 @@ export function ShareFilesModal({ isOpen, onClose, eventId }: ShareFilesModalPro
         <StepContainer>
           {isLoading ? <p>Carregando arquivos...</p> : (
             <FileList>
-              {files?.map((file: EventFile) => (
-                <CheckboxContainer key={file.id}>
-                  <input type="checkbox" id={file.id} onChange={() => handleFileSelect(file.id)} />
-                  <label htmlFor={file.id}>{file.file_name}</label>
-                </CheckboxContainer>
-              ))}
+              {files?.map((file: EventFile) => {
+                const fileType = getFileTypeLabel(file);
+                const isSelected = selectedFileIds.includes(file.id);
+                const shortFileName = file.file_name.length > 35 
+                  ? `${file.file_name.substring(0, 35)}...`
+                  : file.file_name;
+                
+                return (
+                  <FileCard 
+                    key={file.id}
+                    isSelected={isSelected}
+                    fileType={fileType}
+                    onClick={() => handleFileSelect(file.id)}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={() => handleFileSelect(file.id)}
+                      style={{ margin: 0 }}
+                    />
+                    <FileIcon fileType={fileType}>
+                      {getFileTypeIcon(fileType)}
+                    </FileIcon>
+                    <FileInfo>
+                      <FileTypeName>{fileType}</FileTypeName>
+                      <FileName>{shortFileName}</FileName>
+                    </FileInfo>
+                  </FileCard>
+                );
+              })}
             </FileList>
           )}
           <Button onClick={handleGenerateClick} disabled={isLoading || generateMutation.isPending}>

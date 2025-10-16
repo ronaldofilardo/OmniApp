@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
@@ -45,21 +44,7 @@ const Form = styled.form`
   gap: 1.5rem;
 `;
 
-// NOVO: Styled component para o Select
-const Select = styled.select`
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background-color: #EDEDED;
-  color: ${({ theme }) => theme.colors.text};
-  -webkit-appearance: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e" );
-  background-position: right 0.5rem center;
-  background-repeat: no-repeat;
-  background-size: 1.5em 1.5em;
-`;
+// Removido Select
 
 const FileInputLabel = styled.label`
   display: flex;
@@ -94,50 +79,94 @@ const SuccessMessage = styled.div`
   color: ${({ theme }) => theme.colors['feedback-success']};
 `;
 
-// NOVO: Constante com os tipos de arquivo
-const FILE_TYPES = [
-  { value: 'Requisicao', label: 'Requisição de Exame' },
-  { value: 'Autorizacao', label: 'Autorização de Convênio' },
-  { value: 'Atestado', label: 'Atestado Médico' },
-  { value: 'Prescricao', label: 'Prescrição / Receita' },
-  { value: 'LaudoResultado', label: 'Laudo / Resultado de Exame' },
-  { value: 'NotaFiscal', label: 'Nota Fiscal / Recibo' },
-];
+// Removido FILE_TYPES
 
 export function PublicUploadPage() {
-  const { eventId } = useParams<{ eventId: string }>();
   const [uploadCode, setUploadCode] = useState('');
-  const [fileType, setFileType] = useState(''); // NOVO ESTADO
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [expectedType, setExpectedType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: (formData: FormData) => api.post(`/events/${eventId}/files`, formData, {
+    mutationFn: (formData: FormData) => api.post('/files/upload-by-code', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
     onSuccess: () => {
       setIsSuccess(true);
       setError(null);
     },
-    onError: (err: any) => {
-      setError(err.response?.data?.message || 'Ocorreu um erro. Verifique os dados e tente novamente.');
+    onError: (err: unknown) => {
+      // extrair mensagem de erro de forma segura
+      const message = getErrorMessage(err, 'Ocorreu um erro. Verifique os dados e tente novamente.');
+      setError(message);
     },
   });
 
+  // Utilitário local para extrair mensagens de erro sem usar `any`
+  function getErrorMessage(err: unknown, fallback = 'Erro') {
+    if (!err) return fallback;
+    // tentar acessar campos comuns de axios/error
+    try {
+      const maybe = err as { response?: { data?: { message?: string } }; message?: string };
+      return maybe.response?.data?.message || maybe.message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile || !uploadCode || !fileType) { // Adicionado fileType à validação
+    if (!selectedFile || !uploadCode) {
       setError('Todos os campos são obrigatórios.');
       return;
+    }
+    // Se já soubermos o tipo esperado, validar o mime-type básico
+    if (expectedType) {
+      const lowercase = expectedType.toLowerCase();
+      if (lowercase.includes('pdf') && selectedFile.type !== 'application/pdf') {
+        setError('Este envio exige um arquivo PDF.');
+        return;
+      }
+      if (lowercase.includes('imagem') && !selectedFile.type.startsWith('image/')) {
+        setError('Este envio exige um arquivo de imagem.');
+        return;
+      }
     }
     setError(null);
     const formData = new FormData();
     formData.append('file', selectedFile);
     formData.append('upload_code', uploadCode);
-    formData.append('file_type', fileType); // Adicionado fileType ao FormData
     mutation.mutate(formData);
   };
+
+  // Ao alterar o código, buscar o tipo esperado (com debounce simples)
+  useEffect(() => {
+    if (!uploadCode || uploadCode.length < 3) {
+      setExpectedType(null);
+      return;
+    }
+
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const resp = await api.get(`/files/upload-code/${encodeURIComponent(uploadCode)}`);
+        if (cancelled) return;
+        // espera que o backend retorne { expected_type: '...' } ou similar
+        const data = resp.data as { expected_type?: string; file_type?: string } | undefined;
+        setExpectedType(data?.expected_type || data?.file_type || null);
+      } catch {
+        if (cancelled) return;
+        // não tratar como erro visual, apenas limpar
+        setExpectedType(null);
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [uploadCode]);
 
   if (isSuccess) {
     return (
@@ -167,23 +196,11 @@ export function PublicUploadPage() {
             maxLength={6}
             disabled={mutation.isPending}
           />
-          {/* NOVO CAMPO SELECT */}
-          <Select
-            value={fileType}
-            onChange={(e) => setFileType(e.target.value)}
-            disabled={mutation.isPending}
-            required
-          >
-            <option value="" disabled>Selecione o tipo de documento...</option>
-            {FILE_TYPES.map(type => (
-              <option key={type.value} value={type.value}>{type.label}</option>
-            ))}
-          </Select>
 
           <FileInputLabel>
             <HiddenInput
               type="file"
-              accept="image/jpeg,.jpg,.jpeg"
+              accept={expectedType && expectedType.toLowerCase().includes('pdf') ? '.pdf,application/pdf' : 'image/*'}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) {
@@ -191,16 +208,16 @@ export function PublicUploadPage() {
                   return;
                 }
 
-                // Validação do tipo de arquivo
-                if (file.type !== 'image/jpeg') {
-                  alert('Apenas arquivos JPG são aceitos.');
+                // Validação: aceitar apenas imagens e tamanho máximo 2KB
+                if (!file.type || !file.type.startsWith('image/')) {
+                  alert('Apenas arquivos do tipo imagem são aceitos.');
                   setSelectedFile(null);
                   return;
                 }
 
-                // Validação do tamanho do arquivo (6KB = 6144 bytes)
-                if (file.size > 6144) {
-                  alert('O arquivo deve ter no máximo 6KB.');
+                // Validação do tamanho do arquivo (2KB = 2048 bytes)
+                if (file.size > 2 * 1024) {
+                  alert('O arquivo deve ter no máximo 2KB.');
                   setSelectedFile(null);
                   return;
                 }
@@ -209,6 +226,12 @@ export function PublicUploadPage() {
               }}
               disabled={mutation.isPending}
             />
+            {/* mostrar tipo esperado abaixo do input */}
+            {expectedType && (
+              <div style={{ width: '100%', textAlign: 'center', marginBottom: '8px', color: '#666' }}>
+                Tipo esperado: <strong>{expectedType}</strong>
+              </div>
+            )}
             {selectedFile ? (
               <>
                 <File size={32} />
@@ -221,7 +244,7 @@ export function PublicUploadPage() {
               </>
             )}
           </FileInputLabel>
-          <Button type="submit" disabled={mutation.isPending || !selectedFile || !uploadCode || !fileType}>
+          <Button type="submit" disabled={mutation.isPending || !selectedFile || !uploadCode}>
             {mutation.isPending ? 'Enviando...' : 'Enviar Documento'}
           </Button>
           {error && (

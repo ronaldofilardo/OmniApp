@@ -1,19 +1,21 @@
 import { Router } from 'express';
-import { getSharingSessionsForDebug } from '../services/debug.service';
-import logger from '../logger';
+import jwt from 'jsonwebtoken';
+import config from '../config';
 
 const router = Router();
 
-// GET /debug/sharing-sessions - Listar sessões de compartilhamento (debug)
-router.get('/sharing-sessions', async (req, res) => {
-  try {
-    const pool = req.app.locals.pool;
-    const sessions = await getSharingSessionsForDebug(pool);
-    return res.status(200).json(sessions);
-  } catch (error) {
-    logger.error({ err: error }, 'Erro no debug/sharing-sessions');
-    return res.status(500).json({ message: 'Erro ao listar sessions de compartilhamento.' });
+// Rota de desenvolvimento que gera um token para o REQUIRED_USER_EMAIL
+router.get('/dev-token', (req, res) => {
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(404).json({ message: 'Not found' });
   }
+
+  const email = process.env.REQUIRED_USER_EMAIL || 'user@email.com';
+  const secret = config.jwtSecret || process.env.JWT_SECRET;
+  if (!secret) return res.status(500).json({ message: 'JWT secret not configured' });
+
+  const token = jwt.sign({ email }, secret, { expiresIn: '7d' });
+  return res.json({ token, email });
 });
 
 export default router;

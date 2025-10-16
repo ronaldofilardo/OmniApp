@@ -73,20 +73,10 @@ import detectConflicts from './services/conflicts';
 })();
 
 // --- Configuração do Multer (Upload) ---
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = 'uploads/';
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-const upload = multer({ storage: storage });
+// Use memoryStorage here to avoid writing uploaded files into the project folder
+// (writing into the repo can trigger ts-node-dev file watchers and restart the process).
+const memoryStorage = multer.memoryStorage();
+const upload = multer({ storage: memoryStorage });
 
 // --- Rota de Status ---
 // Nota: deleção do evento é implementada mais adiante com transação; evitar duplicação aqui
@@ -128,6 +118,15 @@ const upload = multer({ storage: storage });
 // --- Inicialização do Servidor ---
 const PORT = config.port || 3333;
 const HOST = '0.0.0.0';
+// Global process error handlers to avoid silent exits and provide diagnostics
+process.on('uncaughtException', (err: any) => {
+  logger.error({ err }, 'uncaughtException - unexpected error. Process will not exit (logged).');
+});
+
+process.on('unhandledRejection', (reason: any, promise: any) => {
+  logger.error({ reason, promise }, 'unhandledRejection - promise rejected without handler.');
+});
+
 app.listen(PORT, HOST, () => {
   const localIp = getLocalIp();
   logger.info({ 

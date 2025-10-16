@@ -40,11 +40,12 @@ function fixIsoTime(str?: string) {
   return '1970-01-01T' + str.substring(11, 16) + ':00.000Z';
 }
 
-export async function getTimeline(pool: Pool, prisma: PrismaClient, startDate: string, endDate: string) {
+export async function getTimeline(pool: Pool, prisma: PrismaClient, startDate: string, endDate: string, user_id?: string) {
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
   // Lógica de getTimeline
   const client = await pool.connect();
   try {
-    const eventsResult = await client.query('SELECT * FROM events WHERE user_id = $1 AND deleted_at IS NULL', [MOCK_USER_ID]);
+  const eventsResult = await client.query('SELECT * FROM events WHERE user_id = $1 AND deleted_at IS NULL', [EFFECTIVE_USER_ID]);
     const eventMasters = eventsResult.rows;
 
     const timelineItems: any[] = [];
@@ -64,7 +65,7 @@ export async function getTimeline(pool: Pool, prisma: PrismaClient, startDate: s
 
     const reminders = await prisma.reminders.findMany({
       where: {
-        user_id: MOCK_USER_ID,
+        user_id: EFFECTIVE_USER_ID,
         due_date: {
           gte: new Date(startDate),
           lte: new Date(endDate)
@@ -91,11 +92,19 @@ export async function getTimeline(pool: Pool, prisma: PrismaClient, startDate: s
   }
 }
 
-export async function checkConflicts(pool: Pool, event_date: string, start_time: string, end_time: string, professional: string, excludeId?: string) {
-  return await detectConflicts(pool, MOCK_USER_ID, { event_date, start_time, end_time, professional, excludeId });
+export async function checkConflicts(pool: Pool, event_date: string, start_time: string, end_time: string, professional: string, excludeId?: string, user_id?: string) {
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
+  return await detectConflicts(pool, EFFECTIVE_USER_ID, { event_date, start_time, end_time, professional, excludeId });
 }
 
-export async function createEvent(pool: Pool, prisma: PrismaClient, eventData: any, override_travel_conflict: boolean = false) {
+export async function createEvent(
+  pool: Pool,
+  prisma: PrismaClient,
+  eventData: any,
+  override_travel_conflict: boolean = false,
+  user_id?: string,
+) {
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
   const { type, professional, event_date, start_time, end_time, notes, treatment_total_doses, treatment_alert_threshold, stock_quantity, schedule_return_reminder = false } = eventData;
 
   const today = new Date();
@@ -109,7 +118,7 @@ export async function createEvent(pool: Pool, prisma: PrismaClient, eventData: a
       throw new Error('Datas/horários inválidos.');
     }
 
-    const conflictsResult = await detectConflicts(pool, MOCK_USER_ID, { event_date, start_time, end_time, professional });
+    const conflictsResult = await detectConflicts(pool, EFFECTIVE_USER_ID, { event_date, start_time, end_time, professional });
     if (conflictsResult.error === 'invalid_datetime') {
       throw new Error('Datas/horários inválidos.');
     }
@@ -122,21 +131,21 @@ export async function createEvent(pool: Pool, prisma: PrismaClient, eventData: a
         throw { conflictType: 'travel_gap', conflicts: travelConflicts, message: `Conflito de deslocamento detectado (menos de ${TRAVEL_GAP_MINUTES} minutos).` };
       }
       try {
-        await pool.query(`INSERT INTO event_conflict_overrides (user_id, event_id, overridden_conflicts) VALUES ($1, $2, $3)`, [MOCK_USER_ID, null, JSON.stringify(travelConflicts)]);
+        await pool.query(`INSERT INTO event_conflict_overrides (user_id, event_id, overridden_conflicts) VALUES ($1, $2, $3)`, [EFFECTIVE_USER_ID, null, JSON.stringify(travelConflicts)]);
       } catch (err) {
         logger.warn({ err }, 'Failed to persist override audit');
       }
-      logger.info({ user: MOCK_USER_ID, conflicts: (travelConflicts || []).map((c: any) => c.id) }, 'Override de conflito de deslocamento aceito');
+      logger.info({ user: EFFECTIVE_USER_ID, conflicts: (travelConflicts || []).map((c: any) => c.id) }, 'Override de conflito de deslocamento aceito');
     }
   }
 
   const eventDataForPrisma: any = {
-    user_id: MOCK_USER_ID,
+    user_id: EFFECTIVE_USER_ID,
     type,
     professional,
     event_date: event_date ? `${event_date}T00:00:00.000Z` : undefined,
-    start_time: start_time ? `1970-01-01T${start_time}:00.000Z` : undefined,
-    end_time: end_time ? `1970-01-01T${end_time}:00.000Z` : undefined,
+    start_time: start_time ? `1970-01-01T${padTime(start_time)}:00.000Z` : undefined,
+    end_time: end_time ? `1970-01-01T${padTime(end_time)}:00.000Z` : undefined,
     notes,
     instructions: eventData.instructions || null,
     schedule_return_reminder,
@@ -149,21 +158,23 @@ export async function createEvent(pool: Pool, prisma: PrismaClient, eventData: a
   return newEvent;
 }
 
-export async function getEvents(prisma: PrismaClient) {
+export async function getEvents(prisma: PrismaClient, user_id?: string) {
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
   return await prisma.events.findMany({
-    where: { user_id: MOCK_USER_ID, deleted_at: null },
+    where: { user_id: EFFECTIVE_USER_ID, deleted_at: null },
     orderBy: { created_at: 'desc' }
   });
 }
 
-export async function getEventsByPeriod(pool: Pool, prisma: PrismaClient, startDate: string, endDate: string) {
+export async function getEventsByPeriod(pool: Pool, prisma: PrismaClient, startDate: string, endDate: string, user_id?: string) {
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
   const eventMasters = await prisma.events.findMany({
-    where: { user_id: MOCK_USER_ID, deleted_at: null }
+    where: { user_id: EFFECTIVE_USER_ID, deleted_at: null }
   });
 
   const items: any[] = [];
 
-  const professionalsList = await prisma.professionals.findMany({ where: { user_id: MOCK_USER_ID } });
+  const professionalsList = await prisma.professionals.findMany({ where: { user_id: EFFECTIVE_USER_ID } });
   const profMap = new Map<string, any>();
   for (const p of professionalsList) {
     profMap.set(String(p.name), { address: p.address || null, contact: p.contact || null, specialty: p.specialty || null });
@@ -210,10 +221,11 @@ export async function getEventsByPeriod(pool: Pool, prisma: PrismaClient, startD
   return items;
 }
 
-export async function updateEvent(pool: Pool, prisma: PrismaClient, id: string, eventData: any, override_travel_conflict: boolean = false) {
+export async function updateEvent(pool: Pool, prisma: PrismaClient, id: string, eventData: any, override_travel_conflict: boolean = false, user_id?: string) {
   const { type, professional, event_date, start_time, end_time, notes, treatment_total_doses, treatment_alert_threshold, stock_quantity, schedule_return_reminder = false } = eventData;
 
-  const conflictsResult = await detectConflicts(pool, MOCK_USER_ID, { event_date, start_time, end_time, professional, excludeId: id });
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
+  const conflictsResult = await detectConflicts(pool, EFFECTIVE_USER_ID, { event_date, start_time, end_time, professional, excludeId: id });
   if (conflictsResult.error === 'invalid_datetime') {
     throw new Error('Datas/horários inválidos.');
   }
@@ -226,23 +238,23 @@ export async function updateEvent(pool: Pool, prisma: PrismaClient, id: string, 
       throw { conflictType: 'travel_gap', conflicts: travelConflicts, message: `Conflito de deslocamento detectado (menos de ${TRAVEL_GAP_MINUTES} minutos).` };
     }
     try {
-      await pool.query(`INSERT INTO event_conflict_overrides (user_id, event_id, overridden_conflicts) VALUES ($1, $2, $3)`, [MOCK_USER_ID, id, JSON.stringify(travelConflicts)]);
+      await pool.query(`INSERT INTO event_conflict_overrides (user_id, event_id, overridden_conflicts) VALUES ($1, $2, $3)`, [EFFECTIVE_USER_ID, id, JSON.stringify(travelConflicts)]);
     } catch (err) {
       logger.warn({ err }, 'Failed to persist override audit');
     }
-    logger.info({ user: MOCK_USER_ID, conflicts: (travelConflicts || []).map((c: any) => c.id) }, 'Override de conflito de deslocamento aceito');
+    logger.info({ user: EFFECTIVE_USER_ID, conflicts: (travelConflicts || []).map((c: any) => c.id) }, 'Override de conflito de deslocamento aceito');
   }
 
   const eventDateISO = event_date ? `${event_date}T00:00:00.000Z` : undefined;
   const startTimeISO = start_time ? `1970-01-01T${padTime(start_time)}:00.000Z` : undefined;
-  const endTimeISO = end_time ? `1970-01-01T${end_time}:00.000Z` : undefined;
+  const endTimeISO = end_time ? `1970-01-01T${padTime(end_time)}:00.000Z` : undefined;
 
   const eventDateFinal = fixIsoDate(eventDateISO);
   const startTimeFinal = fixIsoTime(startTimeISO);
   const endTimeFinal = fixIsoTime(endTimeISO);
 
   const updatedEvent = await prisma.events.update({
-    where: { id, user_id: MOCK_USER_ID },
+    where: { id, user_id: EFFECTIVE_USER_ID },
     data: {
       type,
       professional,
@@ -261,17 +273,18 @@ export async function updateEvent(pool: Pool, prisma: PrismaClient, id: string, 
   return updatedEvent;
 }
 
-export async function getEventById(pool: Pool, id: string) {
+export async function getEventById(pool: Pool, id: string, user_id?: string) {
   const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!uuidV4Regex.test(id)) {
     throw new Error('ID inválido. Esperado UUID v4.');
   }
-  const result = await pool.query('SELECT * FROM events WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, MOCK_USER_ID]);
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
+  const result = await pool.query('SELECT * FROM events WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, EFFECTIVE_USER_ID]);
   if (result.rows.length === 0) throw new Error('Evento não encontrado.');
   return result.rows[0];
 }
 
-export async function deleteEvent(pool: Pool, id: string) {
+export async function deleteEvent(pool: Pool, id: string, user_id?: string) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -286,7 +299,8 @@ export async function deleteEvent(pool: Pool, id: string) {
       }
     }
 
-    const updateRes = await client.query('UPDATE events SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING id', [id, MOCK_USER_ID]);
+    const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
+    const updateRes = await client.query('UPDATE events SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING id', [id, EFFECTIVE_USER_ID]);
     if (updateRes.rowCount === 0) {
       await client.query('ROLLBACK');
       throw new Error('Evento não encontrado ou já deletado.');
@@ -299,23 +313,73 @@ export async function deleteEvent(pool: Pool, id: string) {
   }
 }
 
-export async function generateUploadCode(pool: Pool, id: string) {
-  const eventResult = await pool.query('SELECT id FROM events WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, MOCK_USER_ID]);
-  if (eventResult.rows.length === 0) {
+export async function generateUploadCode(pool: Pool, prisma: PrismaClient, id: string, fileType: string, user_id?: string) {
+  const EFFECTIVE_USER_ID = user_id || MOCK_USER_ID;
+  const event = await prisma.events.findUnique({
+    where: { id, user_id: EFFECTIVE_USER_ID, deleted_at: null }
+  });
+  if (!event) {
     throw new Error('Evento não encontrado.');
+  }
+
+  // Check if code already exists for this event and fileType
+  const existing = await prisma.upload_codes.findUnique({
+    where: { event_id_file_type: { event_id: id, file_type: fileType } }
+  });
+  if (existing && existing.status === 'active') {
+    // If exists but no plain_code, overwrite with new one
+    if (!existing.plain_code) {
+      // Overwrite
+    } else {
+      throw new Error('Código já existe para este tipo de arquivo.');
+    }
   }
 
   const uploadCode = Math.floor(100000 + Math.random() * 900000).toString();
   const salt = await bcrypt.genSalt(10);
-  const uploadCodeHash = await bcrypt.hash(uploadCode, salt);
+  const codeHash = await bcrypt.hash(uploadCode, salt);
   const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  const upsertResult = await prisma.upload_codes.upsert({
+    where: { event_id_file_type: { event_id: id, file_type: fileType } },
+    update: {
+      code_hash: codeHash,
+      plain_code: uploadCode,
+      expires_at: expiresAt,
+      status: 'active'
+    },
+    create: {
+      event_id: id,
+      user_id: EFFECTIVE_USER_ID,
+      file_type: fileType,
+      code_hash: codeHash,
+      plain_code: uploadCode,
+      expires_at: expiresAt,
+      status: 'active'
+    }
+  });
+  logger.info({ eventId: id, fileType, upsertId: upsertResult?.id }, 'Upload code upserted');
 
-  await pool.query(
-    `UPDATE events 
-     SET upload_code_hash = $1, upload_code_expires_at = $2, upload_code_status = 'active' 
-     WHERE id = $3`,
-    [uploadCodeHash, expiresAt, id]
-  );
+  return { uploadCode, eventId: id, fileType };
+}
 
-  return { uploadCode, eventId: id };
+export async function getUploadCodeForEvent(pool: Pool, prisma: PrismaClient, id: string, fileType: string) {
+  // Return the plain_code if present and active
+  const code = await prisma.upload_codes.findFirst({
+    where: { event_id: id, file_type: fileType, status: 'active', expires_at: { gt: new Date() } }
+  }) as any;
+  if (!code) return null;
+  // If plain_code exists return it, otherwise return null (can't recover from hash)
+  return (code && code.plain_code) ? code.plain_code : null;
+}
+
+export async function getUploadCodesForEvent(pool: Pool, prisma: PrismaClient, id: string) {
+  const codes = await prisma.upload_codes.findMany({
+    where: { event_id: id, status: 'active', expires_at: { gt: new Date() } }
+  }) as any[];
+  // Map file_type -> plain_code (if available)
+  const map: Record<string, string | null> = {};
+  for (const c of codes) {
+    map[c.file_type] = c.plain_code || null;
+  }
+  return map;
 }

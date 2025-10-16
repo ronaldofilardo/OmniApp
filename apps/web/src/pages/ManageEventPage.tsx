@@ -291,7 +291,13 @@ export function ManageEventPage() {
 
   useEffect(() => {
     if (isEditMode && existingEventData) {
-      reset(existingEventData);
+      // Normalizar horários para formato HH:mm (remover segundos se vier do DB)
+      const normalizedData = {
+        ...existingEventData,
+        start_time: existingEventData.start_time?.slice(0, 5) || existingEventData.start_time,
+        end_time: existingEventData.end_time?.slice(0, 5) || existingEventData.end_time,
+      };
+      reset(normalizedData);
     }
   }, [isEditMode, existingEventData, reset]);
 
@@ -402,7 +408,8 @@ export function ManageEventPage() {
   }, [watchedProfessional, watchedDate, watchedStart, watchedEnd]);
 
   // Derive submit disabled state: mutation pending OR overlap OR travel_gap pending confirmation
-  const isSubmitDisabled = mutation.isPending || !!(formConflict && (formConflict.type === 'overlap' || formConflict.type === 'travel_gap'));
+  // Permitir submit quando for conflito de deslocamento (travel_gap) para abrir o fluxo de confirmação
+  const isSubmitDisabled = mutation.isPending || (formConflict?.type === 'overlap');
 
   // Proactive conflict check with debounce
   useEffect(() => {

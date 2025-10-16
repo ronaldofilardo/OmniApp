@@ -1,0 +1,16 @@
+{
+  "buildCommand": "pnpm build",
+  "outputDirectory": "apps/next-app/.next",
+  "framework": "nextjs",
+  "functions": {
+    "apps/next-app/src/app/api/**/*.ts": {
+      "runtime": "@vercel/node"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    }
+  ]
+}

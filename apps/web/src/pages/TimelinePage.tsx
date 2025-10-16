@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+// (useQuery já importado acima)
 import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -9,6 +9,7 @@ import { api } from '../services/api';
 import { EventCard } from '../components/EventCard';
 import { Button } from '../components/Button';
 import type { TimelineItem } from '../types/timeline';
+import { useQuery } from '@tanstack/react-query';
 
 // Styled Components (sem alterações)
 const TimelineContainer = styled.div`
@@ -111,6 +112,28 @@ export function TimelinePage() {
     queryFn: fetchTimelineItems,
   });
 
+  // Buscar notificações e construir um mapa de eventId -> info
+  const { data: notifications } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => api.get('/notifications').then(res => res.data),
+  });
+
+  const notificationsMap: Record<string, { total: number; unread: number }> = {};
+  if (Array.isArray(notifications)) {
+    for (const n of notifications) {
+      try {
+        const url = new URL(n.action_url || '/', window.location.origin);
+        const eventId = url.searchParams.get('eventId');
+        if (!eventId) continue;
+        if (!notificationsMap[eventId]) notificationsMap[eventId] = { total: 0, unread: 0 };
+        notificationsMap[eventId].total += 1;
+        if (n.status === 'unread') notificationsMap[eventId].unread += 1;
+      } catch {
+        // ignore malformed
+      }
+    }
+  }
+
   // Estado local para controlar qual ocorrência está ativa/selecionada
   const [activeOccurrenceId, setActiveOccurrenceId] = useState<string | null>(null);
 
@@ -137,16 +160,17 @@ export function TimelinePage() {
                 <span>{format(parseISO(day), "dd/MM/yyyy - EEEE", { locale: ptBR })}</span>
               </DayHeader>
               <EventsList>
-                {groupedItems[day].map((item: any, index: number) => {
+                {groupedItems[day].map((item: TimelineItem, index: number) => {
                   // Renderizar ocorrências e eventos pontuais
                   if (item.item_type === 'occurrence') {
                     return (
                       <EventCard 
                         key={item.occurrence_id} 
-                        item={item as any} 
+                        item={item} 
                         position={index % 2 === 0 ? 'left' : 'right'} 
                         isActive={activeOccurrenceId === item.occurrence_id}
                         onSelect={(occId) => setActiveOccurrenceId(prev => prev === occId ? null : occId)}
+                        notificationInfo={notificationsMap[item.occurrence_id]}
                       />
                     );
                   }
@@ -155,10 +179,11 @@ export function TimelinePage() {
                     return (
                       <EventCard
                         key={item.id}
-                        item={item as any}
+                        item={item}
                         position={index % 2 === 0 ? 'left' : 'right'}
                         isActive={false}
                         onSelect={() => {}}
+                        notificationInfo={notificationsMap[item.id]}
                       />
                     );
                   }

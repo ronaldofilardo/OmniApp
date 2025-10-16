@@ -1,35 +1,30 @@
 import { PrismaClient } from '@prisma/client';
 import fs from 'fs';
+import bcrypt from 'bcryptjs';
 import logger from '../logger';
+import * as notificationsService from './notifications.service';
 
 const MOCK_USER_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef';
 
-export async function getFilesForEvent(prisma: PrismaClient, eventId: string) {
+export async function getFilesForEvent(prisma: PrismaClient, eventId: string, token?: string) {
   const files = await prisma.event_files.findMany({
     where: { event_id: eventId },
-    select: { 
-      id: true, 
-      file_name: true, 
-      file_type: true, 
+    select: {
+      id: true,
+      file_name: true,
+      file_type: true,
       file_path: true,
       file_content: true,
       mime_type: true
     }
   });
   return files.map((file: any) => {
-    // Se tem conteúdo Base64, usar ele; senão manter compatibilidade com file_path
-    if (file.file_content) {
-      return {
-        ...file,
-        url: `data:${file.mime_type};base64,${file.file_content}`
-      };
-    } else if (file.file_path) {
-      return {
-        ...file,
-        url: `${process.env.BASE_URL || 'http://localhost:3333'}/${file.file_path.replace(/\\/g, '/')}`
-      };
-    }
-    return file;
+    // URL sem token - acesso livre
+    const baseUrl = `${process.env.BASE_URL || 'http://localhost:3333'}/files/${file.id}/view`;
+    return {
+      ...file,
+      url: baseUrl
+    };
   });
 }
 
@@ -61,6 +56,86 @@ export async function markFileAsViewed(prisma: PrismaClient, fileId: string) {
     throw new Error('Arquivo já estava marcado como visto ou não foi encontrado.');
   }
   return { message: 'Arquivo marcado como visto.' };
+}
+
+export async function getFileById(prisma: PrismaClient, fileId: string) {
+  const file = await prisma.event_files.findUnique({
+    where: { id: fileId },
+    select: {
+      id: true,
+      file_name: true,
+      file_type: true,
+      file_path: true,
+      file_content: true,
+      mime_type: true,
+      user_id: true
+    }
+  });
+  return file;
+}
+
+export async function uploadFileByCode(prisma: PrismaClient, uploadCode: string, file: Express.Multer.File) {
+  // Find the upload code
+  const codes = await prisma.upload_codes.findMany({
+    where: { status: 'active', expires_at: { gt: new Date() } }
+  });
+
+  let matchedCode: any = null;
+  for (const code of codes) {
+    const isMatch = await bcrypt.compare(uploadCode, code.code_hash);
+    if (isMatch) {
+      matchedCode = code;
+      break;
+    }
+  }
+
+  if (!matchedCode) {
+    throw new Error('Código de acesso inválido ou expirado.');
+  }
+
+  // Check if file already exists for this event and file_type
+  const existingFile = await prisma.event_files.findUnique({
+    where: { event_id_file_type: { event_id: matchedCode.event_id, file_type: matchedCode.file_type } }
+  });
+  if (existingFile) {
+    throw new Error('Arquivo já foi enviado para este slot.');
+  }
+
+  // Upload the file
+  const fileContent = file.buffer.toString('base64');
+
+  const newFile = await prisma.event_files.create({
+    data: {
+      event_id: matchedCode.event_id,
+      file_name: file.originalname,
+      file_type: matchedCode.file_type,
+      mime_type: file.mimetype,
+      file_content: fileContent,
+      user_id: matchedCode.user_id,
+      uploaded_at: new Date()
+    }
+  });
+
+  // Mark code as used
+  await prisma.upload_codes.update({
+    where: { id: matchedCode.id },
+    data: { status: 'used' }
+  });
+
+  // Notify user about document received
+  try {
+    const event = await prisma.events.findUnique({
+      where: { id: matchedCode.event_id },
+      select: { professional: true },
+    });
+    const professionalName = event?.professional || 'Clínica/Laboratório';
+    await notificationsService.notifyDocumentReceived(prisma, matchedCode.event_id, matchedCode.file_type, professionalName);
+  } catch (err) {
+    logger.error({ err }, 'Erro ao enviar notificação de documento recebido');
+    // Não falhar o upload por causa da notificação
+  }
+
+  return { message: 'Arquivo enviado com sucesso.', file: newFile };
 }
 
 export async function deleteFile(prisma: PrismaClient, fileId: string) {

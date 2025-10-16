@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { NavLink, Outlet } from 'react-router-dom';
 // CORREÇÃO: Import limpo, sem duplicatas
 import { ChartLine, Users, Files, Calendar, List, X } from 'phosphor-react';
+import { NotificationBell } from './NotificationBell';
 
 // --- Styled Components com Media Queries (sem alterações) ---
 
@@ -149,6 +150,7 @@ export function AppLayout() {
         </Nav>
       </Sidebar>
       <MainContent>
+        <NotificationBell />
         <Outlet />
       </MainContent>
     </AppContainer>

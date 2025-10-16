@@ -14,7 +14,7 @@ interface EventFile {
   id: string;
   file_name: string;
   file_type: string;
-  url: string;
+  url?: string | null;
 }
 
 interface Event {
@@ -90,6 +90,10 @@ const SlotsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1rem;
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
 `;
 
 // --- Constantes e Funções ---
@@ -259,25 +263,30 @@ export function FilesRepositoryPage() {
           </EventHeader>
           <EventDate>Arquivos sem evento associado — disponíveis no repositório</EventDate>
           <SlotsGrid>
-            {orphans.map((file: EventFile) => (
-              <div key={file.id} style={{ border: '1px solid #eee', padding: '0.75rem', borderRadius: 8, background: '#fff' }}>
-                <p style={{ fontWeight: 600 }}>{file.file_name}</p>
-                <p style={{ fontSize: 12, color: '#666' }}>Tipo: {file.file_type || '—'}</p>
-                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                  <a href={file.url} target="_blank" rel="noreferrer">Visualizar</a>
-                  <button onClick={async () => {
-                    if (!window.confirm('Deseja apagar este arquivo permanentemente do repositório?')) return;
-                    try {
-                      await api.delete(`/files/${file.id}`);
-                      await queryClient.invalidateQueries({ queryKey: ['repository-events'] });
-                    } catch (err: unknown) {
-                      console.error('Falha ao deletar arquivo órfão:', err);
-                      alert('Falha ao deletar arquivo.');
-                    }
-                  }}>Deletar permanentemente</button>
+            {orphans.map((file: EventFile) => {
+              // URL sem token - acesso livre
+              const apiBaseUrl = api.defaults.baseURL || 'http://localhost:3333';
+              const viewUrl = file.url || `${apiBaseUrl}/files/${file.id}/view`;
+              return (
+                <div key={file.id} style={{ border: '1px solid #eee', padding: '0.75rem', borderRadius: 8, background: '#fff' }}>
+                  <p style={{ fontWeight: 600 }}>{file.file_name}</p>
+                  <p style={{ fontSize: 12, color: '#666' }}>Tipo: {file.file_type || '—'}</p>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                    <a href={viewUrl} target="_blank" rel="noreferrer">Visualizar</a>
+                    <button onClick={async () => {
+                      if (!window.confirm('Deseja apagar este arquivo permanentemente do repositório?')) return;
+                      try {
+                        await api.delete(`/files/${file.id}`);
+                        await queryClient.invalidateQueries({ queryKey: ['repository-events'] });
+                      } catch (err: unknown) {
+                        console.error('Falha ao deletar arquivo órfão:', err);
+                        alert('Falha ao deletar arquivo.');
+                      }
+                    }}>Deletar permanentemente</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </SlotsGrid>
         </EventGroup>
       )}

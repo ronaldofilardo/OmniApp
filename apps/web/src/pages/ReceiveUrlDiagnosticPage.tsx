@@ -29,22 +29,30 @@ export function ReceiveUrlDiagnosticPage() {
       VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'NOT_SET'
     };
 
-    // Simular a mesma lógica do ReceiveFileModal
+    // Simular a mesma lógica do ReceiveFileModal (padronizada para localhost)
     const getFrontendBase = () => {
       if (import.meta.env.VITE_FRONTEND_URL) {
         return import.meta.env.VITE_FRONTEND_URL;
       }
       
       if (typeof window !== 'undefined') {
-        return window.location.origin;
+        const currentOrigin = window.location.origin;
+        
+        // Padronizar para localhost se estiver usando IP da rede
+        if (currentOrigin.includes('192.168.') || currentOrigin.includes('localhost')) {
+          const port = window.location.port ? `:${window.location.port}` : '';
+          return `http://localhost${port}`;
+        }
+        
+        return currentOrigin;
       }
       
       return 'http://localhost:5173';
     };
 
     const frontendBase = getFrontendBase();
-    const sampleEventId = '12345678-1234-1234-1234-123456789abc';
-    const sampleUploadUrl = `${frontendBase.replace(/\/$/, '')}/receber/exame/${sampleEventId}`;
+    // Use the generic receive page (clinic will enter the upload code there)
+    const sampleUploadUrl = `${frontendBase.replace(/\/$/, '')}/receber`;
 
     setDiagnostics({
       windowOrigin,

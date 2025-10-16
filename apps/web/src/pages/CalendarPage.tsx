@@ -1,12 +1,24 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import styled from 'styled-components';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import DatePicker, { registerLocale } from 'react-datepicker';
+import { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
+import { 
+  format, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  addDays, 
+  isSameMonth, 
+  isSameDay, 
+  addMonths, 
+  subMonths,
+  startOfDay
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ArrowLeft, FilePdf } from 'phosphor-react';
+import { ArrowLeft, FilePdf, CaretLeft, CaretRight } from 'phosphor-react';
 
 import { api } from '../services/api';
 import { type Event } from '../store/event.store';
@@ -20,13 +32,26 @@ const PageContainer = styled.div`
   max-width: 1200px;
   margin: 1rem auto;
   padding: 2rem;
+  
+  @media (max-width: 768px) {
+    padding: 0.5rem 0.25rem !important;
+    margin: 0.5rem auto !important;
+  }
+  @media (max-width: 480px) {
+    padding: 0.15rem 0.05rem !important;
+    margin: 0.15rem auto !important;
+  }
 `;
 
 const Header = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  @media (max-width: 480px) {
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
 `;
 
 const BackLink = styled(Link)`
@@ -35,6 +60,10 @@ const BackLink = styled(Link)`
   gap: 0.5rem;
   color: #555;
   text-decoration: none;
+  font-size: 1rem;
+  @media (max-width: 480px) {
+    font-size: 0.95rem;
+  }
   &:hover {
     color: #000;
   }
@@ -42,6 +71,9 @@ const BackLink = styled(Link)`
 
 const Title = styled.h1`
   font-size: 1.75rem;
+  @media (max-width: 480px) {
+    font-size: 1.2rem;
+  }
 `;
 
 const CalendarLayout = styled.div`
@@ -51,7 +83,15 @@ const CalendarLayout = styled.div`
   align-items: flex-start;
 
   @media (max-width: 992px) {
-    grid-template-columns: 1fr; // Muda para coluna única em telas menores
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 768px) {
+    gap: 1rem;
+  }
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
   }
 `;
 
@@ -61,6 +101,102 @@ const CalendarContainer = styled.div`
   border-radius: 8px;
   border: 1px solid #e0e0e0;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  @media (max-width: 480px) {
+    padding: 0.5rem 0.2rem !important;
+  }
+`;
+
+const CustomCalendar = styled.div`
+  width: 100%;
+  max-width: 350px;
+  @media (max-width: 480px) {
+    max-width: 100vw !important;
+    margin-left: 0.05rem !important;
+    margin-right: 0.05rem !important;
+  }
+`;
+
+const CalendarHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 1rem;
+  @media (max-width: 480px) {
+    padding: 0.5rem 0;
+    margin-bottom: 0.5rem;
+  }
+`;
+
+const MonthNavButton = styled.button`
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #666;
+  display: flex;
+  align-items: center;
+  
+  &:hover {
+    background-color: #f5f5f5;
+    color: #333;
+  }
+`;
+
+const MonthYearTitle = styled.h3`
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  text-transform: capitalize;
+`;
+
+const CalendarGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+`;
+
+const DayHeader = styled.div`
+  padding: 0.5rem;
+  text-align: center;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #666;
+  background-color: #f8f9fa;
+`;
+
+const DayCell = styled.button<{ 
+  isSelected?: boolean; 
+  isToday?: boolean; 
+  hasEvent?: boolean; 
+  isOtherMonth?: boolean; 
+}>`
+  padding: 0.5rem;
+  border: none;
+  background: ${({ isSelected, hasEvent, isOtherMonth }) => 
+    isSelected ? '#2196f3' : 
+    hasEvent ? '#fff3e0' : 
+    isOtherMonth ? '#f9f9f9' : 'white'};
+  color: ${({ isSelected, isToday, isOtherMonth }) => 
+    isSelected ? 'white' : 
+    isToday ? '#2196f3' : 
+    isOtherMonth ? '#ccc' : '#333'};
+  cursor: pointer;
+  border-radius: 4px;
+  font-weight: ${({ isSelected, isToday }) => (isSelected || isToday) ? '600' : '400'};
+  transition: all 0.2s ease;
+  
+  &:hover:not(:disabled) {
+    background-color: ${({ isSelected }) => isSelected ? '#1976d2' : '#e3f2fd'};
+  }
+  
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 `;
 
 const EventsContainer = styled.div`
@@ -70,6 +206,14 @@ const EventsContainer = styled.div`
   border: 1px solid #e0e0e0;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   min-height: 400px;
+  @media (max-width: 768px) {
+    padding: 1rem;
+    min-height: 300px;
+  }
+  @media (max-width: 480px) {
+    padding: 0.5rem 0.2rem !important;
+    min-height: 200px !important;
+  }
 `;
 
 const EventsHeader = styled.div`
@@ -148,11 +292,108 @@ const fetchEventsByPeriod = async (startDate: string, endDate: string): Promise<
   return data;
 };
 
+// Função auxiliar para renderizar o calendário customizado
+function renderCustomCalendar(
+  currentDate: Date,
+  selectedDate: Date,
+  onDateSelect: (date: Date) => void,
+  onMonthChange: (date: Date) => void,
+  eventsInMonth: Event[] = []
+) {
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const startDate = startOfWeek(monthStart, { weekStartsOn: 0 });
+  const endDate = endOfWeek(monthEnd, { weekStartsOn: 0 });
+
+  const days = [];
+  let currentDay = startDate;
+
+  // Criar array de dias para o calendário
+  while (currentDay <= endDate) {
+    days.push(currentDay);
+    currentDay = addDays(currentDay, 1);
+  }
+
+  // Verificar se uma data tem eventos
+  const hasEvents = (date: Date) => {
+    return eventsInMonth.some(event => {
+      const eventDate = event.event_date;
+      if (!eventDate) return false;
+      
+      try {
+        const eventDateObj = typeof eventDate === 'string' && eventDate.includes('T')
+          ? new Date(eventDate)
+          : new Date(eventDate + 'T00:00:00');
+        
+        return isSameDay(eventDateObj, date);
+      } catch {
+        return false;
+      }
+    });
+  };
+
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  return (
+    <CustomCalendar>
+      <CalendarHeader>
+        <MonthNavButton onClick={() => onMonthChange(subMonths(currentDate, 1))}>
+          <CaretLeft size={16} />
+        </MonthNavButton>
+        <MonthYearTitle>
+          {format(currentDate, "MMMM 'de' yyyy", { locale: ptBR })}
+        </MonthYearTitle>
+        <MonthNavButton onClick={() => onMonthChange(addMonths(currentDate, 1))}>
+          <CaretRight size={16} />
+        </MonthNavButton>
+      </CalendarHeader>
+
+      <CalendarGrid>
+        {dayNames.map(day => (
+          <DayHeader key={day}>{day}</DayHeader>
+        ))}
+        
+        {days.map(day => {
+          const isSelected = isSameDay(day, selectedDate);
+          const isToday = isSameDay(day, startOfDay(new Date()));
+          const hasEvent = hasEvents(day);
+          const isOtherMonth = !isSameMonth(day, currentDate);
+
+          return (
+            <DayCell
+              key={day.toISOString()}
+              isSelected={isSelected}
+              isToday={isToday}
+              hasEvent={hasEvent}
+              isOtherMonth={isOtherMonth}
+              onClick={() => onDateSelect(day)}
+            >
+              {format(day, 'd')}
+            </DayCell>
+          );
+        })}
+      </CalendarGrid>
+    </CustomCalendar>
+  );
+}
+
 export function CalendarPage() {
   const toast = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
+
+  // Garante que selectedDate acompanhe mudanças de mês quando necessário
+  useEffect(() => {
+    if (viewMode === 'month') {
+      // Se selectedDate não está no mês atual mostrado, ajusta para o primeiro dia do mês
+      if (selectedDate.getMonth() !== currentDate.getMonth() || 
+          selectedDate.getFullYear() !== currentDate.getFullYear()) {
+        const newSelectedDate = startOfMonth(currentDate);
+        setSelectedDate(newSelectedDate);
+      }
+    }
+  }, [currentDate, viewMode, selectedDate]);
 
   const { period, title } = useMemo(() => {
     let start, end, periodTitle;
@@ -183,20 +424,43 @@ export function CalendarPage() {
     };
   }, [selectedDate, viewMode]);
 
-  const { data: events, isLoading } = useQuery({
-    queryKey: ['events', period],
+  const { data: events, isLoading, error } = useQuery({
+    queryKey: ['events', period, format(currentDate, 'yyyy-MM')],
     queryFn: () => fetchEventsByPeriod(period.startDate, period.endDate),
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    refetchOnWindowFocus: false,
+    retry: 2,
   });
 
   // professionals hook removido: endpoint /events/by-period já retorna professional_address/contact
 
   const { data: monthEventsForHighlight } = useQuery({
-    queryKey: ['events', { month: format(currentDate, 'yyyy-MM') }],
+    queryKey: ['events-highlight', format(currentDate, 'yyyy-MM')],
     queryFn: () => fetchEventsByPeriod(
       format(startOfMonth(currentDate), 'yyyy-MM-dd'),
       format(endOfMonth(currentDate), 'yyyy-MM-dd')
     ),
+    staleTime: 5 * 60 * 1000, // 5 minutos
+    refetchOnWindowFocus: false,
   });
+
+  // Função para alterar mês no calendário customizado
+  const handleMonthChange = (newDate: Date) => {
+    setCurrentDate(newDate);
+    // No modo mês, também ajusta selectedDate para o primeiro dia do novo mês
+    if (viewMode === 'month') {
+      setSelectedDate(startOfMonth(newDate));
+    }
+  };
+
+  // Função para selecionar data no calendário customizado
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date);
+    // Só atualiza currentDate se mudou o mês
+    if (date.getMonth() !== currentDate.getMonth() || date.getFullYear() !== currentDate.getFullYear()) {
+      setCurrentDate(date);
+    }
+  };
 
   const handleExportPdf = async () => {
     if (!events || events.length === 0) {
@@ -229,20 +493,20 @@ export function CalendarPage() {
 
       <CalendarLayout>
         <CalendarContainer>
-          <DatePicker
-            selected={selectedDate}
-            onChange={(date: Date | null) => date && setSelectedDate(date)}
-            locale="pt-BR"
-            inline
-            onMonthChange={(date) => setCurrentDate(date)}
-            highlightDates={monthEventsForHighlight?.map(e => {
-              const raw = e.event_date;
-              if (!raw) return new Date('');
-              if (typeof raw === 'string' && raw.includes('T')) return new Date(raw);
-              return new Date(raw + 'T00:00:00');
-            })}
-          />
+          {renderCustomCalendar(
+            currentDate,
+            selectedDate,
+            handleDateSelect,
+            handleMonthChange,
+            monthEventsForHighlight || []
+          )}
           <ViewModeContainer>
+            <ViewModeButton 
+              isActive={viewMode === 'day'} 
+              onClick={() => setViewMode('day')}
+            >
+              Dia
+            </ViewModeButton>
             <ViewModeButton 
               isActive={viewMode === 'week'} 
               onClick={() => setViewMode('week')}
@@ -267,6 +531,8 @@ export function CalendarPage() {
           </EventsHeader>
           {isLoading ? (
             <p>Carregando eventos...</p>
+          ) : error ? (
+            <p style={{ color: '#f44336' }}>Erro ao carregar eventos. Tente novamente.</p>
           ) : events && events.length > 0 ? (
             <EventList>
               {(viewMode === 'day'

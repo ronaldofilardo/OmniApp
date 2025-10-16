@@ -17,30 +17,35 @@ interface AuthState {
 
 // MODIFICAÇÃO PARA O MVP:
 // O estado inicial de 'isAuthenticated' é definido como 'true' para bypassar a tela de login.
-// O usuário é mockado com o mesmo ID usado no backend para consistência.
+// Sem autenticação JWT - acesso livre
 export const useAuthStore = create<AuthState>((set) => ({
-  user: { id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef', email: 'mvp-user@healthtimeline.com' },
-  isAuthenticated: true, // <-- MODIFICADO: Sempre autenticado para o MVP
+  user: null,
+  isAuthenticated: false,
   error: null,
   
-  // A lógica de login e logout é mantida para o pós-MVP, mas não será utilizada no fluxo principal do MVP.
+  // Login simplificado sem JWT
   login: async (credentials) => {
     try {
       const response = await api.post('/users/login', credentials);
       if (response.status === 200) {
+        // Sem token - apenas marca como autenticado
         set({ user: response.data.user, isAuthenticated: true, error: null });
         return true;
       }
       return false;
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Erro ao tentar fazer login.';
+    } catch (err: unknown) {
+      // extrair mensagem de erro de forma segura
+      let errorMessage = 'Erro ao tentar fazer login.';
+      try {
+        const maybe = err as { response?: { data?: { message?: string } }; message?: string };
+        errorMessage = maybe?.response?.data?.message || maybe?.message || errorMessage;
+      } catch (e) { console.warn('Error parsing login error', e); }
       set({ error: errorMessage, isAuthenticated: false, user: null });
       return false;
     }
   },
   logout: () => {
-    // No MVP, o logout não altera o estado de autenticação.
-    // A lógica será reativada no pós-MVP.
-    // set({ user: null, isAuthenticated: false, error: null });
-  },
+    // Logout simplificado
+    set({ user: null, isAuthenticated: false, error: null });
+  }
 }));

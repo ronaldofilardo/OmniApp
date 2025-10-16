@@ -31,8 +31,12 @@ describe('sharing.service - behavior', () => {
 
   it('verifySharingSession should return access token when code matches', async () => {
     const pool: any = { query: vi.fn()
-      .mockResolvedValueOnce({ rows: [{ id: 's1', access_code_hash: 'storedHash', file_ids: ['f1'] }] })
-      .mockResolvedValueOnce({})
+      // Primeira query: debug (todas as sessões)
+      .mockResolvedValueOnce({ rows: [{ token: 'token-1', status: 'pending', expires_at: new Date(Date.now() + 10000), access_code_hash: 'storedHash' }] })
+      // Segunda query: sessões válidas
+      .mockResolvedValueOnce({ rows: [{ id: 's1', access_code_hash: 'storedHash', file_ids: ['f1'], status: 'pending' }] })
+      // Terceira query: UPDATE
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
     };
     vi.spyOn(bcrypt, 'compare').mockResolvedValue(true as any);
     vi.spyOn(jwt, 'sign').mockReturnValue('signed-token' as any);

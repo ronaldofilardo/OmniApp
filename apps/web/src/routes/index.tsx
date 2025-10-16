@@ -5,13 +5,13 @@ import { ManageEventPage } from '../pages/ManageEventPage';
 import { ProfessionalsListPage } from '../pages/ProfessionalsListPage';
 import { NewProfessionalPage } from '../pages/NewProfessionalPage';
 import { FilesRepositoryPage } from '../pages/FilesRepositoryPage';
-// PrivateRoute não está sendo usado no momento, mas mantemos o import
-// import { PrivateRoute } from './PrivateRoute'; 
+import { PrivateRoute } from './PrivateRoute'; 
 import { AppLayout } from '../components/AppLayout';
 // import { BackupPage } from '../pages/BackupPage'; // DESABILITADO PARA VERCEL DEPLOY
 import { SharePage } from '../pages/SharePage';
 import { CalendarPage } from '../pages/CalendarPage';
 import { PublicUploadPage } from '../pages/PublicUploadPage';
+import { ExternalSubmitPage } from '../pages/ExternalSubmitPage';
 import { DiagnosticPage } from '../pages/DiagnosticPage';
 import { ReceiveUrlDiagnosticPage } from '../pages/ReceiveUrlDiagnosticPage';
 
@@ -21,14 +21,16 @@ export function AppRouter() {
       {/* Rotas Públicas (sem layout principal) */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/share/:shareToken" element={<SharePage />} />
-      <Route path="/receber/exame/:eventId" element={<PublicUploadPage />} />
+      <Route path="/receber" element={<PublicUploadPage />} />
+      <Route path="/external-submit" element={<ExternalSubmitPage />} />
       <Route path="/diagnostic" element={<DiagnosticPage />} />
       <Route path="/diagnostic-receive" element={<ReceiveUrlDiagnosticPage />} />
       
       {/* Rotas Privadas (com layout principal) */}
-      <Route path="/" element={<AppLayout />}>
-        <Route index element={<TimelinePage />} />
-        <Route path="timeline" element={<TimelinePage />} />
+      <Route element={<PrivateRoute />}>
+        <Route path="/" element={<AppLayout />}>
+          <Route index element={<TimelinePage />} />
+          <Route path="timeline" element={<TimelinePage />} />
         
         {/* Rotas para Eventos Pontuais */}
         <Route path="events/create" element={<ManageEventPage />} />
@@ -46,6 +48,7 @@ export function AppRouter() {
           <h2>Página não encontrada</h2>
           <p>A página que você está procurando não existe.</p>
         </div>} />
+      </Route>
       </Route>
       
       {/* Rota de fallback global */}

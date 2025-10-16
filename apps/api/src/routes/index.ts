@@ -8,6 +8,9 @@ import { professionalsRouter } from './professionals.router';
 import sharingRouter from './sharing.router';
 import repositoryRouter from './repository.router';
 import debugRouter from './debug.router';
+import usersRouter from './users.router';
+import { notificationsRouter } from './notifications.router';
+import { externalRouter } from './external.router';
 
 export const router = Router();
 
@@ -46,7 +49,8 @@ router.get('/timeline', async (req: Request, res: Response) => {
 		return res.status(400).json({ message: 'Os parâmetros startDate e endDate são obrigatórios.' });
 	}
 	try {
-		const items = await eventsService.getTimeline((req as any).app.locals.pool, (req as any).app.locals.prisma, startDate, endDate);
+		const userId = (req as any)?.user?.id;
+		const items = await eventsService.getTimeline((req as any).app.locals.pool, (req as any).app.locals.prisma, startDate, endDate, userId);
 		return res.status(200).json(items);
 	} catch (error) {
 		return res.status(500).json({ message: 'Erro interno ao buscar a timeline.' });
@@ -56,6 +60,7 @@ router.get('/timeline', async (req: Request, res: Response) => {
 // GET /events/:id/files -> delega para o serviço de arquivos (endpoint legacy esperado)
 router.get('/events/:eventId/files', async (req: Request, res: Response) => {
 	const { eventId } = req.params;
+	const prisma = (req.app as any).locals.prisma;
 	try {
 		const files = await filesService.getFilesForEvent(prisma, eventId);
 		return res.status(200).json(files);
@@ -70,6 +75,7 @@ router.post('/events/:eventId/files', upload.single('file'), async (req: Request
 	const { eventId } = req.params;
 	const { file_type, upload_code } = req.body;
 	const file = (req as any).file;
+	const prisma = (req.app as any).locals.prisma; // Usar o prisma do app.locals
 	if (!file) return res.status(400).json({ message: 'Nenhum arquivo enviado.' });
 	if (!file_type) {
 		return res.status(400).json({ message: 'O tipo do arquivo é obrigatório.' });
@@ -105,6 +111,16 @@ router.post('/events/:eventId/files', upload.single('file'), async (req: Request
 	try {
 		console.info(`[upload-diagnostics] compat event=${eventId} - iniciando persistência de arquivo name=${file.originalname} size=${file.size}`);
 		
+		// Buscar o evento para pegar o user_id correto
+		const event = await prisma.events.findUnique({
+			where: { id: eventId },
+			select: { user_id: true }
+		});
+
+		if (!event) {
+			return res.status(404).json({ message: 'Evento não encontrado.' });
+		}
+
 		// Verifica se já existe um arquivo deste tipo para este evento
 		const existingFile = await prisma.event_files.findFirst({
 			where: {
@@ -133,7 +149,7 @@ router.post('/events/:eventId/files', upload.single('file'), async (req: Request
 				}
 			});
 		} else {
-			// Cria novo arquivo
+			// Cria novo arquivo usando o user_id do evento
 			newFile = await prisma.event_files.create({
 				data: {
 					event_id: eventId,
@@ -142,7 +158,7 @@ router.post('/events/:eventId/files', upload.single('file'), async (req: Request
 					mime_type: file.mimetype || '',
 					file_content: fileContent,
 					file_path: null,
-					user_id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
+					user_id: event.user_id, // Usar o user_id do evento
 					uploaded_at: new Date()
 				}
 			});
@@ -171,5 +187,8 @@ router.use('/professionals', professionalsRouter);
 router.use('/sharing', sharingRouter);
 router.use('/repository', repositoryRouter);
 router.use('/debug', debugRouter);
+router.use('/users', usersRouter);
+router.use('/notifications', notificationsRouter);
+router.use('/external', externalRouter);
 
 // TODO: montar outros sub-routers aqui

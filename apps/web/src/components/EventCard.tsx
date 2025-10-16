@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styled, { css } from 'styled-components';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Eye, Archive, PencilSimple, Trash, ShareNetwork, CloudArrowUp, Paperclip, Clipboard } from 'phosphor-react';
+import { Eye, Archive, PencilSimple, Trash, ShareNetwork, CloudArrowUp, Paperclip, Clipboard, Bell } from 'phosphor-react';
 
 import { Modal } from './Modal';
 import { useToast } from './useToast';
@@ -11,7 +11,7 @@ import { Button } from './Button';
 import { api } from '../services/api';
 import { ManageFilesModal } from './ManageFilesModal';
 import { ShareFilesModal } from './ShareFilesModal';
-import { ReceiveFileModal } from './ReceiveFileModal';
+import type { TimelineItem } from '../types/timeline';
 
 // Utilitário para extrair mensagem segura de erro
 function safeErrorMessage(err: unknown, fallback = 'Erro') {
@@ -24,23 +24,7 @@ function safeErrorMessage(err: unknown, fallback = 'Erro') {
   }
 }
 
-// Tipagem para o item da timeline
-interface TimelineItem {
-  id: string;
-  type: string; // Em eventos repetitivos, este é o título
-  professional: string;
-  start_time: string;
-  end_time?: string;
-  notes?: string;
-  is_recurrent: boolean;
-  occurrence_id: string;
-  occurrence_timestamp: string;
-  status: 'pending' | 'confirmed' | 'skipped';
-  // Adicione outros campos que a API retorna, como has_result, etc.
-  instructions?: string;
-  date?: string;
-  event_date?: string;
-}
+// Usamos o tipo compartilhado TimelineItem de src/types/timeline
 
 // Styled Components
 
@@ -202,6 +186,7 @@ interface EventCardProps {
   isActive?: boolean;
   // Callback opcional para selecionar o card
   onSelect?: (occurrenceId: string) => void;
+  notificationInfo?: { total: number; unread: number } | null;
 }
 
 const ShortcutButton = styled.button`
@@ -222,13 +207,12 @@ const ShortcutButton = styled.button`
   z-index: 5;
 `;
 
-export function EventCard({ item, position, isActive = false, onSelect }: EventCardProps) {
+export function EventCard({ item, position, isActive = false, onSelect, notificationInfo = null }: EventCardProps) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [isFilesModalOpen, setFilesModalOpen] = useState(false);
   const [isViewModalOpen, setViewModalOpen] = useState(false);
   const [isShareModalOpen, setShareModalOpen] = useState(false);
-  const [isReceiveModalOpen, setReceiveModalOpen] = useState(false);
 
   // Confirmação de ocorrência foi descontinuada: botões removidos
 
@@ -298,9 +282,23 @@ export function EventCard({ item, position, isActive = false, onSelect }: EventC
     queryFn: () => api.get('/professionals').then(res => res.data),
   });
 
+  // Escutar evento global para abrir modal de arquivos (disparado pela notificação)
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const ce = e as CustomEvent;
+      if (!ce?.detail || !ce.detail.eventId) return;
+      if (ce.detail.eventId === item.id) {
+        setFilesModalOpen(true);
+      }
+    };
+    window.addEventListener('openFilesModal', onOpen as EventListener);
+    return () => { window.removeEventListener('openFilesModal', onOpen as EventListener); };
+  }, [item.id]);
+
   const professionalDetails = Array.isArray(professionals) ? professionals.find((p: { name: string; specialty?: string; address?: string; contact?: string }) => p.name === item.professional) : null;
 
   const hasFiles = Array.isArray(files) && files.length > 0;
+  const hasUnviewedFiles = Array.isArray(files) && files.some((f: { viewed_at?: string | null }) => !f.viewed_at);
 
   // Novo utilitário: obtém a faixa de horário em formato 'HH:MM - HH:MM' ou 'HH:MM'
   const getTimeRange = () => {
@@ -331,12 +329,34 @@ export function EventCard({ item, position, isActive = false, onSelect }: EventC
     <>
   <CardContainer $position={position} $status={item.status} onClick={() => onSelect?.(item.occurrence_id)} style={{ cursor: onSelect ? 'pointer' : 'default' }}>
     {isActive && (
-      <ShortcutButton onClick={(e) => { e.stopPropagation(); setReceiveModalOpen(true); }} title="Receber Documento">
+      <ShortcutButton onClick={(e) => { e.stopPropagation(); setFilesModalOpen(true); }} title="Receber Documento">
         <CloudArrowUp size={14} /> Receber
+        {hasUnviewedFiles && <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: '#dc3545', color: 'white', borderRadius: '50%', width: '8px', height: '8px', fontSize: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>!</span>}
       </ShortcutButton>
     )}
         <CardHeader>
           <span>{`${item.type} - ${item.professional}${getTimeRange() ? ' - ' + getTimeRange() : ''}`}</span>
+          {/* Mostrar sininho somente se houver notificação associada ao evento */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {notificationInfo && notificationInfo.total > 0 ? (
+              <div
+                title={notificationInfo.unread > 0 ? `${notificationInfo.total} notificação(ões) · ${notificationInfo.unread} não visualizada(s)` : `${notificationInfo.total} notificação(ões)`}
+                style={{ color: notificationInfo.unread > 0 ? '#ffc107' : '#007bff', fontSize: '1.2rem', display: 'flex', alignItems: 'center' }}
+              >
+                <Bell size={18} weight={notificationInfo.unread > 0 ? 'fill' : 'regular'} />
+              </div>
+            ) : (
+              <div style={{ color: '#9ca3af', fontSize: '1.2rem', display: 'flex', alignItems: 'center' }} title="Sem notificações">
+                <Bell size={18} weight="regular" />
+              </div>
+            )}
+
+            {notificationInfo && notificationInfo.unread > 0 && (
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', top: '-6px', right: '-6px', background: '#dc3545', color: 'white', borderRadius: '50%', width: '12px', height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>!</span>
+              </div>
+            )}
+          </div>
         </CardHeader>
         {/* Endereço/Local do profissional */}
         {professionalDetails?.address && (
@@ -356,7 +376,6 @@ export function EventCard({ item, position, isActive = false, onSelect }: EventC
             <ActionButton onClick={() => setViewModalOpen(true)}><Eye size={16} /> Visualizar</ActionButton>
             <ActionButton $hasFiles={hasFiles} onClick={() => setFilesModalOpen(true)}>{hasFiles ? <Paperclip size={16} /> : <Archive size={16} />} Arquivos</ActionButton>
             <ActionButton onClick={() => setShareModalOpen(true)}><ShareNetwork size={16} /> Compartilhar</ActionButton>
-            <ActionButton onClick={() => setReceiveModalOpen(true)}><CloudArrowUp size={16} /> Receber Documento</ActionButton>
             {(
               // Mostrar os botões sempre, mas habilitar apenas quando o evento estiver no futuro (antes do início)
               // Durante execução ou após término, os botões aparecem desabilitados com tooltip explicativo.
@@ -412,13 +431,6 @@ export function EventCard({ item, position, isActive = false, onSelect }: EventC
         <ShareFilesModal
           isOpen={isShareModalOpen}
           onClose={() => setShareModalOpen(false)}
-          eventId={item.id}
-        />
-      )}
-      {isReceiveModalOpen && (
-        <ReceiveFileModal
-          isOpen={isReceiveModalOpen}
-          onClose={() => setReceiveModalOpen(false)}
           eventId={item.id}
         />
       )}

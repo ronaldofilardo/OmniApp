@@ -9,7 +9,7 @@ import { api } from '../services/api';
 interface FileData {
   id: string;
   file_name: string;
-  url: string;
+  url?: string | null;
 }
 
 interface FileSlotProps {
@@ -39,9 +39,16 @@ const SlotContainer = styled.div<{ $hasFile: boolean; $isUploading: boolean }>`
   padding: 0.75rem 1rem;
   border-radius: 8px;
   border: 2px dashed #d9d9d9;
-  background-color: #fafafa;
-  transition: all 0.2s ease-in-out;
-  cursor: ${({ $hasFile }) => ($hasFile ? 'default' : 'pointer')};
+    background-color: #fafafa;
+    width: 100%;
+    margin-bottom: 0.75rem;
+
+    @media (max-width: 600px) {
+      padding: 0.5rem 0.3rem;
+      font-size: 0.97rem;
+      margin-bottom: 0.5rem;
+    }
+
 
   &:hover {
     border-color: #2563eb;
@@ -193,16 +200,16 @@ export function FileSlot({ eventId, fileType, fileLabel, fileData, occurrenceTim
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validação JPG 6KB
-      if (file.type !== 'image/jpeg') {
-        alert('Apenas arquivos JPG são permitidos');
-        return;
-      }
-      
-      if (file.size > 6 * 1024) { // 6KB
-        alert('Arquivo muito grande. Máximo permitido: 6KB');
-        return;
-      }
+        // Validação: aceitar apenas imagens e máximo 2KB
+        if (!file.type || !file.type.startsWith('image/')) {
+          alert('Apenas arquivos do tipo imagem são permitidos');
+          return;
+        }
+
+        if (file.size > 2 * 1024) { // 2KB
+          alert('Arquivo muito grande. Máximo permitido: 2KB');
+          return;
+        }
       
       uploadMutation.mutate({ eventId, fileType, file });
     }
@@ -253,9 +260,21 @@ export function FileSlot({ eventId, fileType, fileLabel, fileData, occurrenceTim
         ) : fileData ? (
           <>
             {/* O `onClick` foi adicionado ao link/botão de visualização */}
-            <ActionButton as="a" href={fileData.url} target="_blank" rel="noopener noreferrer" title="Visualizar" onClick={handleViewClick}>
-              <Eye size={20} />
-            </ActionButton>
+            {fileData.url ? (
+              <ActionButton as="a" href={fileData.url} target="_blank" rel="noopener noreferrer" title="Visualizar" onClick={handleViewClick}>
+                <Eye size={20} />
+              </ActionButton>
+            ) : (
+              <ActionButton onClick={() => {
+                // Abre a URL de visualização do arquivo sem token
+                const apiBaseUrl = api.defaults.baseURL || 'http://localhost:3333';
+                const viewUrl = `${apiBaseUrl}/files/${fileData.id}/view`;
+                window.open(viewUrl, '_blank', 'noopener');
+                handleViewClick();
+              }} title="Visualizar">
+                <Eye size={20} />
+              </ActionButton>
+            )}
             <DeleteButton onClick={handleDelete} disabled={deleteMutation.isPending} title="Excluir">
               <Trash size={20} />
             </DeleteButton>
@@ -266,7 +285,7 @@ export function FileSlot({ eventId, fileType, fileLabel, fileData, occurrenceTim
           </ActionButton>
         )}
       </FileActions>
-      <HiddenInput type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/jpeg,.jpg,.jpeg" />
+  <HiddenInput type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" />
     </SlotContainer>
   );
 }

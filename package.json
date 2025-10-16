@@ -8,7 +8,9 @@
     "dev": "pnpm --parallel --filter ./apps/* run dev",
     "dev:api": "pnpm --filter ./apps/api run dev",
     "dev:web": "pnpm --filter ./apps/web run dev",
-    "build": "pnpm --filter ./apps/* run build",
+    "dev:next": "pnpm --filter ./apps/next-app run dev",
+    "build": "pnpm --filter ./apps/next-app run build",
+    "build:all": "pnpm --filter ./apps/* run build",
     "prisma:generate": "pnpm --filter ./apps/api exec prisma generate",
     "prisma:migrate": "pnpm --filter ./apps/api exec prisma migrate dev"
   },

@@ -1,0 +1,117 @@
+name: 🧪 Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: 123456
+          POSTGRES_DB: omni_mvp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: 📦 Install pnpm
+        run: npm install -g pnpm@10.14.0
+
+      - name: 📚 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🗄️ Setup database
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://postgres:123456@localhost:5432/omni_mvp_test
+        run: |
+          pnpm prisma migrate deploy
+          pnpm prisma generate
+
+      - name: 🧪 Run tests
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://postgres:123456@localhost:5432/omni_mvp_test
+        run: pnpm test:coverage
+
+      - name: 📊 Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./apps/api/coverage/lcov.info
+          flags: api
+          name: api-coverage
+          fail_ci_if_error: false
+
+      - name: 📈 Coverage Summary
+        if: always()
+        working-directory: apps/api
+        run: |
+          echo "## 📊 Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage/coverage-summary.json ]; then
+            cat coverage/coverage-summary.json >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Coverage report not found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 📦 Install pnpm
+        run: npm install -g pnpm@10.14.0
+
+      - name: 📚 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Run TypeScript check
+        working-directory: apps/api
+        run: pnpm exec tsc --noEmit
+
+  results:
+    name: Test Results
+    if: always()
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📊 Check results
+        run: |
+          echo "Test job result: ${{ needs.test.result }}"
+          echo "Lint job result: ${{ needs.lint.result }}"
+          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "❌ Some checks failed!"
+            exit 1
+          fi
+          echo "✅ All checks passed!"

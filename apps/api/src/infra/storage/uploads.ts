@@ -4,27 +4,21 @@ import path from 'path';
 // Usar memoryStorage para salvar em Base64 no banco
 const storage = multer.memoryStorage();
 
-// Validação para APENAS JPG de até 6KB
+// Validação: aceitar apenas tipos image/* e tamanho máximo de 2KB
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  // Verificar MIME type
-  if (file.mimetype !== 'image/jpeg') {
-    return cb(new Error('Apenas arquivos JPG são permitidos'));
+  // aceitar qualquer imagem (image/png, image/jpeg, image/gif, etc.)
+  if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+    return cb(new Error('Apenas arquivos do tipo imagem são permitidos'));
   }
-  
-  // Verificar extensão do arquivo
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (ext !== '.jpg' && ext !== '.jpeg') {
-    return cb(new Error('Apenas arquivos com extensão .jpg ou .jpeg são permitidos'));
-  }
-  
+
   cb(null, true);
 };
 
 export const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 6 * 1024, // 6KB máximo
-    files: 1 // apenas 1 arquivo por request
+    fileSize: 2 * 1024, // 2KB máximo
+    files: 6 // permitir até 6 arquivos por request (um por slot)
   },
   fileFilter: fileFilter
 });

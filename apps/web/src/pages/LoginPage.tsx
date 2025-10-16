@@ -67,6 +67,7 @@ export function LoginPage() {
           <Input
             type="email"
             placeholder="Digite seu e-mail"
+            autoComplete="username"
             {...register('email')}
           />
           {errors.email && <ErrorMessage>{errors.email.message}</ErrorMessage>}
@@ -75,6 +76,7 @@ export function LoginPage() {
           <Input
             type="password"
             placeholder="Digite sua senha"
+            autoComplete="current-password"
             {...register('password')}
           />
           {errors.password && <ErrorMessage>{errors.password.message}</ErrorMessage>}

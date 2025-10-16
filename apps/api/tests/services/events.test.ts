@@ -20,7 +20,7 @@ describe('events.service', () => {
     it('should have utility functions defined', () => {
       // Test that the module can be imported without errors
       expect(eventsService).toBeDefined();
-      expect(Object.keys(eventsService)).toHaveLength(9); // All exported functions
+      expect(Object.keys(eventsService)).toHaveLength(11); // All exported functions (atualizado de 9 para 11)
     });
   });
 });

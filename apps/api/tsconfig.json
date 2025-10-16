@@ -10,8 +10,11 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "shared/*": ["../../packages/shared/*"]
-    }
+      "shared/*": ["../../packages/shared/*"],
+      "@/*": ["./src/*"],
+      "@tests/*": ["./tests/*"]
+    },
+    "types": ["vitest/globals"]
   },
-  "include": ["src/**/*", "../../packages/shared/src/**/*"]
+  "include": ["src/**/*", "tests/**/*", "../../packages/shared/src/**/*"]
 }

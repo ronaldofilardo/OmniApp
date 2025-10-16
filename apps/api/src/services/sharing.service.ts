@@ -31,10 +31,20 @@ export async function generateSharingSession(pool: Pool, fileIds: string[]): Pro
 }
 
 export async function verifySharingSession(pool: Pool, shareToken: string, accessCode: string): Promise<string> {
+  console.log('🔍 DEBUG: Buscando sessão com token:', shareToken);
+  
+  // Primeiro, vamos ver se existe a sessão independente do status
+  const debugResult = await pool.query(
+    'SELECT token, status, expires_at, access_code_hash FROM sharing_sessions WHERE token = $1',
+    [shareToken]
+  );
+  console.log('🔍 DEBUG: Sessões encontradas:', debugResult.rows);
+  
   const result = await pool.query(
     'SELECT * FROM sharing_sessions WHERE token = $1 AND status = \'pending\' AND expires_at > NOW()',
     [shareToken]
   );
+  console.log('🔍 DEBUG: Sessões válidas:', result.rows.length);
 
   if (result.rows.length === 0) {
     throw new Error('Sessão de compartilhamento inválida ou expirada.');
@@ -61,13 +71,17 @@ export async function verifySharingSession(pool: Pool, shareToken: string, acces
 }
 
 export async function getSharedFiles(pool: Pool, accessToken: string): Promise<any[]> {
+  console.log('🔐 DEBUG: Verificando JWT token...');
   const decoded = jwt.verify(accessToken, JWT_SHARING_SECRET) as AccessTokenPayload;
+  console.log('✅ DEBUG: JWT decodificado, sessionId:', decoded.sessionId, 'fileIds:', decoded.fileIds);
   const fileIds = decoded.fileIds;
 
+  console.log('🔍 DEBUG: Buscando arquivos no banco, IDs:', fileIds);
   const result = await pool.query(
-    'SELECT id, file_name, file_path FROM event_files WHERE id = ANY($1::uuid[])',
+    'SELECT id, file_name, file_path, file_content, mime_type FROM event_files WHERE id = ANY($1::uuid[])',
     [fileIds]
   );
+  console.log('📄 DEBUG: Arquivos encontrados no banco:', result.rows.length);
 
   return result.rows;
 }

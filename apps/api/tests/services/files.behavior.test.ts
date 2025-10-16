@@ -19,11 +19,16 @@ describe('files.service - behavior', () => {
     };
 
     const fakeFile = {
-      filename: 'file-1.pdf',
-      mimetype: 'application/pdf',
-      path: 'uploads\\file-1.pdf',
+      fieldname: 'file',
       originalname: 'original.pdf',
-      size: 1234
+      encoding: '7bit',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from('fake content'),
+      size: 1234,
+      stream: null as any,
+      destination: 'uploads',
+      filename: 'file-1.pdf',
+      path: 'uploads\\file-1.pdf'
     };
 
     const created = await filesService.uploadFile(fakePrisma, 'event-1', fakeFile, 'report');
@@ -91,5 +96,112 @@ describe('files.service - behavior', () => {
       }
     };
     await expect(filesService.deleteFile(fakePrisma, 'missing')).rejects.toThrow();
+  });
+
+  describe('uploadFileByCode', () => {
+    it('should upload file successfully with valid code', async () => {
+      const fakePrisma: any = {
+        upload_codes: {
+          findMany: vi.fn().mockResolvedValue([
+            { 
+              id: 'code1', 
+              code_hash: '$2b$10$lMdcejLcKbsJ0mu.ntnume7wKjspbAL9D6O6x2j/xaxVGzj681pkm', // Hash de 'validcode'
+              event_id: 'event1', 
+              file_type: 'Requisicao', 
+              user_id: 'user1', 
+              expires_at: new Date(Date.now() + 10000),
+              status: 'active'
+            }
+          ]),
+          update: vi.fn().mockResolvedValue({})
+        },
+        event_files: {
+          findUnique: vi.fn().mockResolvedValue(null), // Nenhum arquivo existente
+          create: vi.fn().mockResolvedValue({ id: 'file1', file_name: 'test.jpg' })
+        },
+        events: {
+          findUnique: vi.fn().mockResolvedValue({ professional: 'Dr. Test' })
+        }
+      };
+
+      const fakeFile = {
+        fieldname: 'file',
+        originalname: 'test.jpg',
+        encoding: '7bit',
+        mimetype: 'image/jpeg',
+        buffer: Buffer.from('fake image data'),
+        size: 100,
+        stream: null as any,
+        destination: 'uploads',
+        filename: 'test.jpg',
+        path: 'uploads/test.jpg'
+      };
+
+      const result = await filesService.uploadFileByCode(fakePrisma, 'validcode', fakeFile);
+      expect(result.message).toBe('Arquivo enviado com sucesso.');
+      expect(fakePrisma.upload_codes.update).toHaveBeenCalledWith({
+        where: { id: 'code1' },
+        data: { status: 'used' }
+      });
+    });
+
+    it('should throw error for invalid or expired code', async () => {
+      const fakePrisma: any = {
+        upload_codes: {
+          findMany: vi.fn().mockResolvedValue([])
+        }
+      };
+
+      const fakeFile = {
+        fieldname: 'file',
+        originalname: 'test.jpg',
+        encoding: '7bit',
+        mimetype: 'image/jpeg',
+        buffer: Buffer.from('fake image data'),
+        size: 100,
+        stream: null as any,
+        destination: 'uploads',
+        filename: 'test.jpg',
+        path: 'uploads/test.jpg'
+      };
+
+      await expect(filesService.uploadFileByCode(fakePrisma, 'invalidcode', fakeFile)).rejects.toThrow('Código de acesso inválido ou expirado.');
+    });
+
+    it('should throw error if file already exists for the slot', async () => {
+      const fakePrisma: any = {
+        upload_codes: {
+          findMany: vi.fn().mockResolvedValue([
+            { 
+              id: 'code1', 
+              code_hash: '$2b$10$lMdcejLcKbsJ0mu.ntnume7wKjspbAL9D6O6x2j/xaxVGzj681pkm', // Hash de 'validcode'
+              event_id: 'event1', 
+              file_type: 'Requisicao', 
+              user_id: 'user1', 
+              expires_at: new Date(Date.now() + 10000),
+              status: 'active'
+            }
+          ])
+        },
+        event_files: {
+          findUnique: vi.fn().mockResolvedValue({ id: 'existing' })
+        }
+      };
+
+      const fakeFile = {
+        fieldname: 'file',
+        originalname: 'test.jpg',
+        encoding: '7bit',
+        mimetype: 'image/jpeg',
+        buffer: Buffer.from('fake image data'),
+        size: 100,
+        stream: null as any,
+        destination: 'uploads',
+        filename: 'test.jpg',
+        path: 'uploads/test.jpg'
+      };
+
+      await expect(filesService.uploadFileByCode(fakePrisma, 'validcode', fakeFile)).rejects.toThrow('Arquivo já foi enviado para este slot.');
+    });
   });
 });

@@ -10,13 +10,14 @@ describe('professionals.service', () => {
       expect(typeof professionalsService.getProfessionalById).toBe('function');
       expect(typeof professionalsService.updateProfessional).toBe('function');
       expect(typeof professionalsService.getSpecialties).toBe('function');
+      expect(typeof professionalsService.deleteProfessional).toBe('function');
     });
   });
 
   describe('utility functions', () => {
     it('should have utility functions defined', () => {
       expect(professionalsService).toBeDefined();
-      expect(Object.keys(professionalsService)).toHaveLength(6); // All exported functions
+      expect(Object.keys(professionalsService)).toHaveLength(7); // All exported functions (inclui deleteProfessional)
     });
   });
 });

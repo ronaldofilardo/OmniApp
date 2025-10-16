@@ -16,19 +16,20 @@ router.post('/generate', async (req, res) => {
     const pool = req.app.locals.pool;
     const session = await generateSharingSession(pool, fileIds);
     
-    // Construir URL de compartilhamento - sempre usar IP da rede local para compatibilidade móvel
+    // Construir URL de compartilhamento - padronizar para localhost
     const requestHost = req.get('host');
     const localIp = getLocalIp();
     
-    // Forçar uso do IP da rede local se disponível, mesmo que a requisição venha de localhost
-    const hostToUse = (localIp !== 'localhost' && !localIp.startsWith('127.')) 
+    // Sempre usar localhost para consistência, exceto se explicitamente em produção
+    const hostToUse = process.env.NODE_ENV === 'production' && localIp !== 'localhost' && !localIp.startsWith('127.')
       ? localIp 
-      : (requestHost ? requestHost.split(':')[0] : 'localhost');
+      : 'localhost';
       
     const frontendPort = process.env.VITE_PORT || process.env.FRONTEND_PORT || '5173';
     const shareUrl = `${req.protocol}://${hostToUse}:${frontendPort}/share/${session.shareToken}`;
     
-    logger.info({ shareUrl, hostToUse, requestHost, localIp }, 'URL de compartilhamento gerada');
+    logger.info({ shareUrl, hostToUse, requestHost, localIp, nodeEnv: process.env.NODE_ENV }, 'URL de compartilhamento gerada');
+    console.log('🔗 DEBUG: ShareURL gerada:', shareUrl);
     res.status(201).json({ ...session, shareUrl });
   } catch (error) {
     logger.error({ err: error }, 'Erro ao gerar link de compartilhamento');
@@ -67,25 +68,71 @@ router.post('/verify', async (req, res) => {
 // GET /sharing/files/:accessToken - Obter arquivos compartilhados
 router.get('/files/:accessToken', async (req, res) => {
   const { accessToken } = req.params;
+  console.log('🔍 DEBUG: Buscando arquivos com accessToken:', accessToken.substring(0, 20) + '...');
   try {
     const pool = req.app.locals.pool;
     const files = await getSharedFiles(pool, accessToken);
+    console.log('📁 DEBUG: Arquivos encontrados:', files.length);
 
-    const filesWithUrls = files.map(file => {
-      const filePath = file.file_path.replace(/\\/g, '/');
-      const fileUrl = `${req.protocol}://${req.get('host')}/${filePath}`;
-      logger.debug({ fileName: file.file_name, fileUrl }, 'URL de arquivo gerada');
-      return {
-        id: file.id,
-        fileName: file.file_name,
-        url: fileUrl
-      };
+    // Para melhorar compatibilidade, retornar URL HTTP de streaming
+    const host = req.get('host');
+    const protocol = req.protocol;
+    const filesWithUrls = files.map((file: any) => {
+      const url = `${protocol}://${host}/sharing/file/${accessToken}/${file.id}`;
+      return { id: file.id, fileName: file.file_name, url };
     });
 
+    console.log('✅ DEBUG: Enviando resposta com', filesWithUrls.length, 'arquivos');
     res.status(200).json(filesWithUrls);
-  } catch (error) {
+  } catch (error: any) {
+    console.log('❌ DEBUG: Erro ao buscar arquivos:', error?.message || error);
     logger.error({ err: error }, 'Erro ao buscar arquivos compartilhados');
     res.status(401).json({ message: 'Token de acesso inválido ou expirado.' });
+  }
+});
+
+// GET /sharing/file/:accessToken/:fileId - Stream do conteúdo do arquivo
+router.get('/file/:accessToken/:fileId', async (req, res) => {
+  const { accessToken, fileId } = req.params as { accessToken: string; fileId: string };
+  try {
+    const pool = req.app.locals.pool;
+    // Reusar verificação do token via getSharedFiles (lança se inválido)
+    const files = await getSharedFiles(pool, accessToken);
+    const allowed = files.find((f: any) => String(f.id) === String(fileId));
+    if (!allowed) {
+      return res.status(404).json({ message: 'Arquivo não autorizado para esta sessão.' });
+    }
+
+    // Buscar o arquivo específico para obter conteúdo/mime atualizados
+    const result = await pool.query(
+      'SELECT file_name, mime_type, file_content FROM event_files WHERE id = $1',
+      [fileId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Arquivo não encontrado.' });
+    }
+    const row = result.rows[0];
+    if (!row.file_content) {
+      return res.status(404).json({ message: 'Arquivo sem conteúdo.' });
+    }
+
+    const mime = row.mime_type || 'application/octet-stream';
+    const buffer = Buffer.from(row.file_content, 'base64');
+
+    // Content-Disposition com filename ASCII e UTF-8 (RFC 5987)
+    const originalName: string = row.file_name || 'arquivo';
+    const asciiName = originalName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '');
+    const encodedName = encodeURIComponent(originalName);
+    const isInline = String(mime).startsWith('image/') || String(mime) === 'application/pdf';
+    const dispositionType = isInline ? 'inline' : 'attachment';
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Disposition', `${dispositionType}; filename="${asciiName || 'arquivo'}"; filename*=UTF-8''${encodedName}`);
+    return res.status(200).send(buffer);
+  } catch (error: any) {
+    console.log('❌ DEBUG: Erro ao servir arquivo compartilhado:', error?.message || error);
+    return res.status(401).json({ message: 'Token de acesso inválido ou expirado.' });
   }
 });
 

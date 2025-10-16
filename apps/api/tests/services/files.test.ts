@@ -14,7 +14,7 @@ describe('files.service', () => {
   describe('utility functions', () => {
     it('should have utility functions defined', () => {
       expect(filesService).toBeDefined();
-      expect(Object.keys(filesService)).toHaveLength(4); // All exported functions
+      expect(Object.keys(filesService)).toHaveLength(6); // All exported functions
     });
   });
 });

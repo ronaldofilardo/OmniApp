@@ -1,20 +1,38 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  // Cria usuário de exemplo com o ID MOCK_USER_ID
-  const user = await prisma.users.upsert({
-    where: { email: 'exemplo@teste.com' },
-    update: { id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef' },
-    create: {
-      id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef',
-      email: 'exemplo@teste.com',
-      password_hash: 'senha123',
-    },
-  });
+  const email = 'user@email.com';
+  const plainPassword = '1234';
 
-  console.log('Usuário criado/atualizado:', user);
+  // Gera hash com salt rounds compatível com bcryptjs (10 rounds)
+  const passwordHash = await bcrypt.hash(plainPassword, 10);
+
+  const MOCK_USER_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef';
+
+  console.log('Removendo todos os usuários existentes...');
+  try {
+    const del = await prisma.users.deleteMany({});
+    console.log('Usuários removidos:', del.count);
+  } catch (e) {
+    console.error('Erro ao remover usuários:', e);
+  }
+
+  console.log('Criando usuário de teste...');
+  try {
+    const user = await prisma.users.create({
+      data: {
+        id: MOCK_USER_ID,
+        email,
+        password_hash: passwordHash,
+      }
+    });
+    console.log('Usuário criado/atualizado:', { id: user.id, email: user.email });
+  } catch (e) {
+    console.error('Erro ao criar usuário:', e);
+  }
 }
 
 main()

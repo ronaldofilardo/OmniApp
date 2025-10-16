@@ -59,7 +59,8 @@ const fetchProfessionals = async () => {
 };
 
 const deleteProfessional = async (id: string) => {
-  await api.delete(`/professionals/${id}`);
+  const { data } = await api.delete(`/professionals/${id}`);
+  return data;
 };
 
 export function ProfessionalsListPage() {
@@ -76,8 +77,13 @@ export function ProfessionalsListPage() {
 
   const deleteMutation = useMutation({
     mutationFn: deleteProfessional,
-    onSuccess: () => {
-      toast.show('Profissional deletado com sucesso.', 'success');
+    onSuccess: (data: any) => {
+      // API returns { action: 'soft_delete'|'hard_delete', ... }
+      if (data?.action === 'soft_delete') {
+        toast.show('Profissional marcado como excluído: existem eventos vinculados e eles não foram removidos.', 'info');
+      } else {
+        toast.show('Profissional deletado com sucesso.', 'success');
+      }
       queryClient.invalidateQueries({ queryKey: ['professionals'] });
       setDeleteModalOpen(false);
       setSelectedProfessionalId(null);
@@ -147,8 +153,8 @@ export function ProfessionalsListPage() {
       <Modal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
         <h2>Confirmar Exclusão</h2>
         <p>
-          Tem certeza que deseja excluir este profissional? 
-          Ele será desassociado de todos os eventos existentes.
+          Tem certeza que deseja excluir este profissional?
+          Se houver eventos associados (passados ou futuros), os eventos não serão removidos e o profissional será apenas marcado como excluído na lista. Caso não exista nenhum evento associado, o profissional será removido definitivamente.
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
           <Button onClick={() => setDeleteModalOpen(false)} style={{ backgroundColor: '#6c757d' }}>

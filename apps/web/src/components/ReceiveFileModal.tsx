@@ -1,9 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { useMutation } from '@tanstack/react-query';
-import { X, Copy, Check } from 'phosphor-react';
-import QRCode from 'react-qr-code';
-import { useToast } from './useToast';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { X } from 'phosphor-react';
 import { api } from '../services/api';
 import { Modal } from './Modal';
 import { Button } from './Button';
@@ -28,199 +26,127 @@ const CloseButton = styled.button`
   line-height: 1;
 `;
 
-const ContentContainer = styled.div`
+const CodeDisplay = styled.div`
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 1rem;
   text-align: center;
-`;
-
-const InfoText = styled.p`
-  color: #666;
-  margin-bottom: 2rem;
-  line-height: 1.5;
-`;
-
-const CodeBox = styled.div`
-  background-color: #f4f4f4;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-`;
-
-const CodeLabel = styled.p`
-  font-size: 0.9rem;
-  color: #333;
-  margin-bottom: 0.5rem;
-`;
-
-const CodeValue = styled.p`
-  font-size: 2.5rem;
+  margin: 1rem 0;
+  font-family: monospace;
+  font-size: 1.5rem;
   font-weight: bold;
-  letter-spacing: 0.5rem;
-  color: ${({ theme }) => theme.colors['primary-blue']};
+  color: #495057;
+`;
+
+const Instructions = styled.p`
+  color: #6c757d;
   margin-bottom: 1rem;
-  font-family: 'Courier New', Courier, monospace;
 `;
 
-const UrlContainer = styled.div`
+const ModalFooter = styled.div`
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background-color: #f4f4f4;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  word-break: break-all;
-`;
-
-const UrlLink = styled.a`
-  color: #007bff;
-  text-decoration: none;
-  word-break: break-all;
-  flex: 1;
-  
-  &:hover {
-    color: #0056b3;
-    text-decoration: underline;
-  }
-  
-  &:visited {
-    color: #6f42c1;
-  }
-`;
-
-const CopyButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  flex-shrink: 0;
-  color: #555;
-  &:hover {
-    color: #000;
-  }
+  justify-content: flex-end;
+  margin-top: 2rem;
+  border-top: 1px solid #eee;
+  padding-top: 1.5rem;
 `;
 
 interface ReceiveFileModalProps {
   isOpen: boolean;
   onClose: () => void;
   eventId: string;
+  fileType?: string;
+  fileLabel?: string;
 }
 
-export function ReceiveFileModal({ isOpen, onClose, eventId }: ReceiveFileModalProps) {
-  const toast = useToast();
-  const [uploadCode, setUploadCode] = useState<string | null>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
-  const [copiedUrl, setCopiedUrl] = useState(false);
+export function ReceiveFileModal({ isOpen, onClose, eventId, fileType = 'Documento', fileLabel = 'Documento' }: ReceiveFileModalProps) {
+  const [code, setCode] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const mutation = useMutation({
-    mutationFn: () => api.post(`/events/${eventId}/generate-upload-code`),
+  useEffect(() => {
+    // When the modal opens, try to fetch an existing active upload code for this event/fileType
+    if (!isOpen) return;
+    const fetchExisting = async () => {
+      try {
+        const resp = await api.get(`/events/${eventId}/upload-code`, { params: { fileType } });
+        if (resp.data && resp.data.uploadCode) {
+          setCode(resp.data.uploadCode);
+        }
+      } catch {
+        // ignore 404 / no code cases
+      }
+    };
+    fetchExisting();
+  }, [isOpen, eventId, fileType]);
+
+  const generateCodeMutation = useMutation({
+    mutationFn: (vars: { fileType: string }) => api.post(`/events/${eventId}/generate-upload-code`, { fileType: vars.fileType }),
     onSuccess: (response) => {
-      setUploadCode(response.data.uploadCode);
+      setCode(response.data.uploadCode);
+      queryClient.invalidateQueries({ queryKey: ['files', eventId] });
+      try {
+        window.dispatchEvent(new CustomEvent('uploadCodeChanged', { detail: { eventId } }));
+      } catch {
+        // ignore
+      }
     },
-    onError: () => {
-      toast.show('Erro ao gerar código de envio. Tente novamente.', 'error');
-      onClose();
+    onError: (error: unknown) => {
+      console.error('Erro ao gerar código', error);
+      let msg = 'Erro ao gerar código. Verifique o console para mais detalhes.';
+      try {
+        const maybe = error as unknown as { response?: { data?: { message?: string } } };
+        if (maybe && maybe.response && maybe.response.data && maybe.response.data.message) {
+          msg = maybe.response.data.message;
+        }
+      } catch (parseErr) {
+        console.error('Erro extraindo mensagem de erro', parseErr);
+      }
+      alert(msg);
     },
   });
 
   const handleGenerateCode = () => {
-    if (!uploadCode) {
-      mutation.mutate();
+    // diagnostic log to ensure payload is correct when calling backend
+    console.log('[diag] generate-upload-code payload', { eventId, fileType });
+    if (!fileType) {
+      alert('fileType está ausente. Não é possível gerar código.');
+      return;
     }
+    generateCodeMutation.mutate({ fileType });
   };
 
-  const copyToClipboard = (text: string, type: 'code' | 'url') => {
-    navigator.clipboard.writeText(text);
-    if (type === 'code') {
-      setCopiedCode(true);
-      setTimeout(() => setCopiedCode(false), 2000);
-    } else {
-      setCopiedUrl(true);
-      setTimeout(() => setCopiedUrl(false), 2000);
-    }
-  };
-
-  // Construir a base do frontend dinamicamente para suportar acesso de rede
-  const getFrontendBase = () => {
-    // Se há variável de ambiente, usar ela
-    if (import.meta.env.VITE_FRONTEND_URL) {
-      return import.meta.env.VITE_FRONTEND_URL;
-    }
-    
-    // Detectar se estamos usando localhost e forçar IP da rede se necessário
-    if (typeof window !== 'undefined') {
-      const currentOrigin = window.location.origin;
-      
-      // Se está usando localhost, substituir pelo IP da rede para funcionar no celular
-      if (currentOrigin.includes('localhost')) {
-        // IP detectado automaticamente da rede
-        return 'http://192.168.15.3:5173';
-      }
-      
-      return currentOrigin;
-    }
-    
-    // Fallback (não deveria acontecer no browser)
-    return 'http://192.168.15.3:5173';
-  };
-  
-  const frontendBase = getFrontendBase();
-  const uploadUrl = `${frontendBase.replace(/\/$/, '')}/receber/exame/${eventId}`;
-  
-  console.log('🔗 Frontend Base URL:', frontendBase);
-  console.log('📤 Upload URL gerada:', uploadUrl);
-
-  // Reset state when modal is closed
   const handleClose = () => {
-    setUploadCode(null);
-    mutation.reset();
+    setCode(null);
     onClose();
   };
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
       <ModalHeader>
-        <ModalTitle>Receber Documentos do Evento</ModalTitle>
+        <ModalTitle>Receber {fileLabel ?? ''}</ModalTitle>
         <CloseButton onClick={handleClose}><X size={24} /></CloseButton>
       </ModalHeader>
-      <ContentContainer>
-        {!uploadCode ? (
-          <>
-            <InfoText>
-              Clique no botão abaixo para gerar um link e um código de uso único.
-              Forneça ambos ao remetente (clínica, médico...) para que eles possam enviar o resultado diretamente para sua timeline.
-            </InfoText>
-            <Button onClick={handleGenerateCode} disabled={mutation.isPending}>
-              {mutation.isPending ? 'Gerando...' : 'Gerar Código e Link'}
-            </Button>
-          </>
-        ) : (
-          <>
-            <InfoText>
-              Forneça o link e o código abaixo para o remetente. Eles poderão escolher o tipo de documento a ser enviado. O código é válido por 90 dias e pode ser usado apenas uma vez. 
-              <br/><strong>Dica:</strong> Clique no link para testá-lo ou compartilhe o QR Code.
-            </InfoText>
-            <CodeBox>
-              <CodeLabel>Código de Envio</CodeLabel>
-              <CodeValue>{uploadCode}</CodeValue>
-              <Button onClick={() => copyToClipboard(uploadCode!, 'code')} style={{ width: 'auto', padding: '0.5rem 1rem' }}>
-                {copiedCode ? <><Check size={16} /> Copiado!</> : <><Copy size={16} /> Copiar Código</>}
-              </Button>
-            </CodeBox>
-            <CodeLabel>Link para Envio</CodeLabel>
-            <UrlContainer>
-              <UrlLink href={uploadUrl} target="_blank" rel="noopener noreferrer">
-                {uploadUrl}
-              </UrlLink>
-              <CopyButton onClick={() => copyToClipboard(uploadUrl, 'url')}>
-                {copiedUrl ? <Check size={20} /> : <Copy size={20} />}
-              </CopyButton>
-            </UrlContainer>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '1.5rem' }}>
-              <QRCode value={uploadUrl} size={128} />
-              <span style={{ fontSize: '0.9rem', color: '#555', marginTop: '0.5rem' }}>Escaneie para acessar o link de envio</span>
-            </div>
-          </>
-        )}
-      </ContentContainer>
+
+      <Instructions>
+        Gere um código único para fornecer à clínica ou laboratório. Eles usarão este código para enviar o {(fileLabel ?? '').toLowerCase()} diretamente para este evento.
+      </Instructions>
+
+      {!code ? (
+        <Button onClick={handleGenerateCode} disabled={generateCodeMutation.isPending}>
+          {generateCodeMutation.isPending ? 'Gerando...' : 'Gerar Código'}
+        </Button>
+      ) : (
+        <>
+          <p>Código gerado com sucesso!</p>
+          <CodeDisplay>{code}</CodeDisplay>
+          <p>Forneça este código de 6 dígitos para a clínica ou laboratório responsável pelo {fileLabel.toLowerCase()}.</p>
+        </>
+      )}
+
+      <ModalFooter>
+        <Button onClick={handleClose}>Fechar</Button>
+      </ModalFooter>
     </Modal>
   );
 }

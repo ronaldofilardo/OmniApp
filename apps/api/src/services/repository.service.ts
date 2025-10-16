@@ -26,27 +26,51 @@ export interface RepositoryEvent {
 }
 
 export async function getOrphanFiles(pool: Pool, req: any): Promise<OrphanFile[]> {
-  const result = await pool.query(
-    'SELECT id, file_name, file_type, file_path, orphaned_at FROM event_files WHERE user_id = $1 AND is_orphan = true ORDER BY orphaned_at DESC',
-    [MOCK_USER_ID]
-  );
+  // Prefer user id from authenticated request if available. Fallback to MOCK_USER_ID for dev/compat.
+  const userIdFromReq = (req && (req.user?.id || req.user?.user?.id)) || MOCK_USER_ID;
 
-  return result.rows.map(file => ({
-    ...file,
-    url: `${req.protocol}://${req.get('host')}/${file.file_path.replace(/\\/g, '/')}`
-  }));
+  // Development helper: when REPO_DEV_SHOW_ALL_ORPHANS is set, return all orphan files
+  // regardless of user. This helps during local development when multiple seeded users
+  // exist and the frontend/backend run in different sessions.
+  const showAll = process.env.REPO_DEV_SHOW_ALL_ORPHANS === 'true';
+  let result;
+  if (showAll) {
+    result = await pool.query(
+      'SELECT id, file_name, file_type, file_path, file_content, mime_type, orphaned_at, user_id FROM event_files WHERE is_orphan = true ORDER BY orphaned_at DESC'
+    );
+  } else {
+    result = await pool.query(
+      'SELECT id, file_name, file_type, file_path, file_content, mime_type, orphaned_at FROM event_files WHERE user_id = $1 AND is_orphan = true ORDER BY orphaned_at DESC',
+      [userIdFromReq]
+    );
+  }
+
+  return result.rows.map((file: any) => {
+    let url = null;
+    // Prefer filesystem path if present
+    if (file.file_path && req && req.get) {
+      url = `${req.protocol}://${req.get('host')}/${file.file_path.replace(/\\/g, '/')}`;
+    } else if (file.file_content && file.mime_type) {
+      // If file content is stored as base64 in DB, expose as data URL for frontend
+      url = `data:${file.mime_type};base64,${file.file_content}`;
+    }
+
+    return {
+      ...file,
+      url
+    };
+  });
 }
 
-export async function getRepositoryEvents(pool: Pool): Promise<RepositoryEvent[]> {
+export async function getRepositoryEvents(pool: Pool, userId: string): Promise<RepositoryEvent[]> {
   const result = await pool.query(
     'SELECT id, type, professional, event_date, start_time, end_time, notes, created_at, deleted_at FROM events WHERE user_id = $1 ORDER BY created_at DESC',
-    [MOCK_USER_ID]
+    [userId]
   );
-
   return result.rows;
 }
 
-export async function confirmDeleteEvent(pool: Pool, eventId: string): Promise<{ message: string }> {
+export async function confirmDeleteEvent(pool: Pool, eventId: string, userId: string): Promise<{ message: string }> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -61,7 +85,7 @@ export async function confirmDeleteEvent(pool: Pool, eventId: string): Promise<{
     // Deletar o evento definitivamente
     const deleteEventRes = await client.query(
       'DELETE FROM events WHERE id = $1 AND user_id = $2 RETURNING id',
-      [eventId, MOCK_USER_ID]
+      [eventId, userId]
     );
 
     if (deleteEventRes.rowCount === 0) {
@@ -86,10 +110,10 @@ export async function confirmDeleteEvent(pool: Pool, eventId: string): Promise<{
   }
 }
 
-export async function restoreEvent(pool: Pool, eventId: string): Promise<{ message: string; event: any }> {
+export async function restoreEvent(pool: Pool, eventId: string, userId: string): Promise<{ message: string; event: any }> {
   const result = await pool.query(
     'UPDATE events SET deleted_at = NULL WHERE id = $1 AND user_id = $2 RETURNING *',
-    [eventId, MOCK_USER_ID]
+    [eventId, userId]
   );
 
   if (result.rowCount === 0) {
