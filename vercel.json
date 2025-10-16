@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd apps/next-app && pnpm install && npx prisma generate && pnpm build",
-  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter next-app build",
+  "installCommand": "pnpm install --no-frozen-lockfile",
   "framework": "nextjs"
 }
