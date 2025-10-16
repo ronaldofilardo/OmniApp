@@ -1,5 +1,1 @@
-{
-  "buildCommand": "pnpm --filter next-app build",
-  "installCommand": "pnpm install --no-frozen-lockfile",
-  "framework": "nextjs"
-}
+{}

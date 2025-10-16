@@ -5,7 +5,7 @@ Write-Host "=== Configuração de Variáveis de Ambiente na Vercel ===" -Foregro
 Write-Host ""
 
 # Gerar um JWT_SECRET aleatório
-$JWT_SECRET = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 64 | ForEach-Object {[char]$_})
+$JWT_SECRET = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 64 | ForEach-Object { [char]$_ })
 
 Write-Host "JWT_SECRET gerado: $JWT_SECRET" -ForegroundColor Green
 Write-Host ""
@@ -69,7 +69,8 @@ if ($response -eq "S" -or $response -eq "s") {
     "60" | vercel env add TRAVEL_GAP_MINUTES production
     
     Write-Host "`n✓ Variáveis configuradas com sucesso!" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "`nValores salvos em env-vars.txt para referência" -ForegroundColor Yellow
     @"
 DATABASE_URL=postgresql://neondb_owner:npg_Iitb6kFyWAj9@ep-soft-cloud-ac5elx48-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require
