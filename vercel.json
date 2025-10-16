@@ -1,16 +1,16 @@
 {
-  "buildCommand": "pnpm build",
-  "outputDirectory": "apps/next-app/.next",
+  "buildCommand": "cd apps/next-app && pnpm install && npx prisma generate && pnpm build",
+  "installCommand": "pnpm install",
   "framework": "nextjs",
+  "buildSettings": {
+    "nodeVersion": "20.x"
+  },
+  "env": {
+    "DATABASE_URL": "@database_url"
+  },
   "functions": {
     "apps/next-app/src/app/api/**/*.ts": {
       "runtime": "@vercel/node"
     }
-  },
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    }
-  ]
+  }
 }
